@@ -2,6 +2,7 @@ from .._abstract.abstract import BaseSecurityHandler, BaseAGSServer
 from ..security.security import AGSTokenSecurityHandler, PortalServerSecurityHandler
 from ..common.general import MosaicRuleObject, local_time_to_online
 import datetime, urllib
+import json
 from ..common import filters
 from ..security import security
 ########################################################################
@@ -71,6 +72,8 @@ class ImageService(BaseAGSServer):
     _singleFusedMapCache = None
     _securityHandler = None
     _hasMultidimensions = None
+    _json = None
+    _json_dict = None
     #----------------------------------------------------------------------
     def __init__(self,
                  url,
@@ -82,17 +85,9 @@ class ImageService(BaseAGSServer):
         self._url = url
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
-        if securityHandler is not None and \
-           isinstance(securityHandler,
-                      (security.AGSTokenSecurityHandler,
-                       security.PortalServerSecurityHandler)):
+        if securityHandler is not None:
             self._securityHandler = securityHandler
-        if not securityHandler is None:
             self._referer_url = securityHandler.referer_url
-        elif securityHandler is None:
-            pass
-        else:
-            raise AttributeError("Security Handler must type of AGSTokenSecurityHandler")
         if initialize:
             self.__init()
     #----------------------------------------------------------------------
@@ -101,11 +96,12 @@ class ImageService(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        if self._securityHandler is not None:
-            params['token'] = self.securityHandler.token
         json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
+        self._json_dict = json_dict
+        self._json = json.dumps(self._json_dict)
         attributes = [attr for attr in dir(self)
                       if not attr.startswith('__') and \
                       not attr.startswith('_')]
@@ -113,7 +109,20 @@ class ImageService(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, v)
             else:
-                print k, " - attribute not implmented for Image Service."
+                print k, " - attribute not implemented for Image Service."
+    #----------------------------------------------------------------------
+    def __str__(self):
+        """returns the object as a string"""
+        if self._json is None:
+            self.__init()
+        return self._json
+    #----------------------------------------------------------------------
+    def __iter__(self):
+        """returns the JSON response in key/value pairs"""
+        if self._json_dict is None:
+            self.__init()
+        for k,v in self._json_dict.iteritems():
+            yield [k,v]
     #----------------------------------------------------------------------
     @property
     def hasMultidimensions(self):
@@ -134,12 +143,10 @@ class ImageService(BaseAGSServer):
             if isinstance(value, (AGSTokenSecurityHandler,
                                   PortalServerSecurityHandler)):
                 self._securityHandler = value
-                self._token = value.token
             else:
                 pass
         elif value is None:
             self._securityHandler = None
-            self._token = None
     #----------------------------------------------------------------------
     @property
     def tileInfo(self):
@@ -562,12 +569,11 @@ class ImageService(BaseAGSServer):
             params['bandIds'] = ",".join(bandIds)
         if renderingRule is not None:
             params['renderingRule'] = renderingRule
-        if self._securityHandler is not None:
-            params['token'] = self._securityHandler.token
         params["f" ] = f
         if f == "json":
             return self._do_get(url=url,
                                 param_dict=params,
+                                securityHandler=self._securityHandler,
                                 proxy_port=self._proxy_port,
                                 proxy_url=self._proxy_url)
         elif f == "image":
@@ -580,7 +586,10 @@ class ImageService(BaseAGSServer):
             url = url + "?%s"  % urllib.urlencode(params)
             return self._download_file(url=url,
                                        save_path=saveFolder,
-                                       file_name=saveFile)
+                                       securityHandler=self._securityHandler,
+                                       file_name=saveFile,
+                                       proxy_url=self._proxy_url,
+                                       proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     def query(self,
               where="1=1",
@@ -641,8 +650,6 @@ class ImageService(BaseAGSServer):
                   "returnIdsOnly" : returnIDsOnly,
                   "returnCountOnly" : returnCountOnly,
                   }
-        if not self._securityHandler is None:
-            params["token"] = self._securityHandler.token
         if not timeFilter is None and \
            isinstance(timeFilter, filters.TimeFilter):
             params['time'] = timeFilter.filter
@@ -662,6 +669,7 @@ class ImageService(BaseAGSServer):
 
         url = self._url + "/query"
         return self._do_get(url=url, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -772,8 +780,6 @@ class ImageService(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        if not self._securityHandler is None:
-            params['token'] = self._securityHandler.token
         if itemIds is None and serviceUrl is None:
             raise Exception("An itemId or serviceUrl must be provided")
         if isinstance(itemIds, str):
@@ -795,6 +801,7 @@ class ImageService(BaseAGSServer):
             params['serviceUrl'] = serviceUrl
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -809,13 +816,10 @@ class ImageService(BaseAGSServer):
             params = {
                 "f" : "json"
             }
-            if not self._securityHandler is None:
-                params['token'] = self._securityHandler.token
             return self._do_get(url=url,
                                 param_dict=params,
+                                securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,
                                 proxy_port=self._proxy_port)
         else:
             return None
-
-

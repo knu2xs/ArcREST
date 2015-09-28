@@ -29,8 +29,6 @@ class Data(BaseAGSServer):
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
         self._url = url
-
-
     #----------------------------------------------------------------------
     @property
     def datastoreConfiguration(self):
@@ -46,11 +44,11 @@ class Data(BaseAGSServer):
            published can reference data. Values: true | false
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         dURL = self._url + "/config"
         return self._do_get(url=dURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -67,11 +65,11 @@ class Data(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "datastoreConfig" : datastoreConfig
         }
         url = self._url + "/config/update"
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -89,15 +87,15 @@ class Data(BaseAGSServer):
         cURL = self._url + "/computeTotalRefCount"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "path" : path
         }
         return self._do_post(url=cURL,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
-    def findDataItems(self, parentPath, ancestorPath=None,
+    def findDataItems(self, parentPath=None, ancestorPath=None,
                       type=None, id=None):
         """
            You can use this operation to search through the various data
@@ -113,9 +111,9 @@ class Data(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
-            "parentPath" : parentPath
         }
+        if parentPath is not None:
+            params['parentPath'] = parentPath
         if ancestorPath is not None:
             params['ancestorPath'] = ancestorPath
         if type is not None:
@@ -124,6 +122,7 @@ class Data(BaseAGSServer):
             params['id'] = id
         fURL = self._url + "/findItems"
         return self._do_post(url=fURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -138,11 +137,11 @@ class Data(BaseAGSServer):
         """
         params = {
             "item" : item,
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         rURL = self._url + "/registerItem"
         return self._do_post(url=rURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -153,11 +152,11 @@ class Data(BaseAGSServer):
         """
         url = self._url + "/items"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_get(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -165,10 +164,10 @@ class Data(BaseAGSServer):
     def validateAllDataItems(self):
         """ validates all the items in the datastore """
         params = {
-        "f" : "json",
-        "token": self._securityHandler.token}
+        "f" : "json"}
         url = self._url + "/validateAllDataItems"
         return self._do_get(url=url, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -190,12 +189,12 @@ class Data(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "item" : item
         }
         url = self._url + "/ validateDataItem"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -207,11 +206,11 @@ class Data(BaseAGSServer):
         """
         url = self._url + "/items/enterpriseDatabases/%s/machines/%s/makePrimary" % (dataStoreName, machineName)
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -226,10 +225,10 @@ class Data(BaseAGSServer):
         """
         url = self._url + "/items/enterpriseDatabases/%s/machines/%s/remove" % (dataStoreItemName, machineName)
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -243,10 +242,10 @@ class Data(BaseAGSServer):
         """
         url = self._url + "/items/enterpriseDatabases/%s/machines/%s/start" % (dataStoreItemName, machineName)
         params = {
-            "f": "json",
-            "token" : self._securityHandler.token
+            "f": "json"
         }
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -260,10 +259,10 @@ class Data(BaseAGSServer):
         """
         url = self._url + "/items/enterpriseDatabases/%s/machines/%s/stop" % (dataStoreItemName, machineName)
         params = {
-            "f": "json",
-            "token" : self._securityHandler.token
+            "f": "json"
         }
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -282,10 +281,10 @@ class Data(BaseAGSServer):
         url = self._url + "/unregisterItem"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "path" : path
         }
         return self._do_post(url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -300,10 +299,10 @@ class Data(BaseAGSServer):
         """
         url = self._url + "/items/enterpriseDatabases/%s/machines/%s/validate" % (dataStoreName, machineName)
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)

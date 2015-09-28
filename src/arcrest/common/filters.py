@@ -5,9 +5,7 @@ import calendar
 import datetime
 from ..common.geometry import Polygon, Polyline, Point, MultiPoint
 from .._abstract.abstract import AbstractGeometry, BaseFilter
-from .. import arcpyFound
-if arcpyFound:
-    import arcpy
+import arcpy
 ########################################################################
 class LayerDefinitionFilter(BaseFilter):
     """
@@ -59,6 +57,15 @@ class GeometryFilter(BaseFilter):
                            intersects, contains, envelope intersects,
                            within, etc. The default spatial relationship
                            is intersects (esriSpatialRelIntersects).
+           bufferDistance - if filter type esriSpatialRelWithin is selected
+                            and the service supports that select type, then
+                            the geometry will be buffered at a given.
+                            Can be of type integer or float.
+           units - the value the distance units represents. Valid values
+                   are: "esriSRUnit_Meter", "esriSRUnit_StatuteMile",
+                        "esriSRUnit_Foot", "esriSRUnit_Kilometer",
+                         "esriSRUnit_NauticalMile", and
+                         "esriSRUnit_USNauticalMile"
        Raises:
           AttributeError for invalid inputs
     """
@@ -74,8 +81,18 @@ class GeometryFilter(BaseFilter):
     _spatialAction = None
     _geomType = None
     _spatialReference = None
+    _buffer = None
+    _units = None
+    _allowed_units = ["esriSRUnit_Meter", "esriSRUnit_StatuteMile",
+                      "esriSRUnit_Foot", "esriSRUnit_Kilometer",
+                      "esriSRUnit_NauticalMile", "esriSRUnit_USNauticalMile"]
     #----------------------------------------------------------------------
-    def __init__(self, geomObject, spatialFilter="esriSpatialRelIntersects"):
+    def __init__(self,
+                 geomObject,
+                 spatialFilter="esriSpatialRelIntersects",
+                 bufferDistance=None,
+                 units="esriSRUnit_Meter"
+                 ):
         """Constructor"""
         self.geometry = geomObject
         if spatialFilter in self._allowedFilters:
@@ -85,6 +102,13 @@ class GeometryFilter(BaseFilter):
             raise AttributeError("geomObject must be a geometry object and "+ \
                                  "spatialFilter must be of value: " + \
                                  "%s" % ", ".join(self._allowedFilters))
+        if not bufferDistance is None and \
+           isinstance(bufferDistance, (int, float)) and \
+           not units is None and \
+           units.lower() in [f.lower() for f in self._allowed_units]:
+            self._buffer = bufferDistance
+            self._units = units
+
     #----------------------------------------------------------------------
     @property
     def spatialRelation(self):
@@ -117,16 +141,16 @@ class GeometryFilter(BaseFilter):
         if isinstance(geometry, AbstractGeometry):
             self._geomObject = geometry
             self._geomType = geometry.type
-        elif arcpyFound and isinstance(geometry, arcpy.Polygon):
+        elif isinstance(geometry, arcpy.Polygon):
             self._geomObject = Polygon(geometry, wkid=geometry.spatialReference.factoryCode)
             self._geomType = "esriGeometryPolygon"
-        elif arcpyFound and isinstance(geometry, arcpy.Point):
+        elif isinstance(geometry, arcpy.Point):
             self._geomObject = Point(geometry, wkid=geometry.spatialReference.factoryCode)
             self._geomType = "esriGeometryPoint"
-        elif arcpyFound and isinstance(geometry, arcpy.Polyline):
+        elif isinstance(geometry, arcpy.Polyline):
             self._geomObject = Polyline(geometry, wkid=geometry.spatialReference.factoryCode)
             self._geomType = "esriGeometryPolyline"
-        elif arcpyFound and isinstance(geometry, arcpy.Multipoint):
+        elif isinstance(geometry, arcpy.Multipoint):
             self._geomObject = MultiPoint(geometry, wkid=geometry.spatialReference.factoryCode)
             self._geomType = "esriGeometryMultipoint"
         else:
@@ -135,12 +159,16 @@ class GeometryFilter(BaseFilter):
     @property
     def filter(self):
         """ returns the key/value pair of a geometry filter """
-        return {"geometryType":self.geometryType,
+
+        val = {"geometryType":self.geometryType,
                 "geometry": json.dumps(self._geomObject.asDictionary),
                 "spatialRel": self.spatialRelation,
                 "inSR" : self._geomObject.spatialReference['wkid']}
-    #----------------------------------------------------------------------
-
+        if self._buffer is not None and \
+           self._units is not None:
+            val['buffer'] = self._buffer
+            val['units'] = self._units
+        return val
 ########################################################################
 class TimeFilter(BaseFilter):
     """ Implements the time filter """

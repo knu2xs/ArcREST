@@ -1,6 +1,7 @@
 """
    Contains information regarding an ArcGIS Server Feature Server
 """
+from re import search
 from .._abstract.abstract import BaseAGSServer, BaseSecurityHandler
 from ..security import security
 import layer
@@ -47,30 +48,24 @@ class FeatureService(BaseAGSServer):
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
         self._url = url
-        if securityHandler is not None and \
-           isinstance(securityHandler,
-                      (security.AGSTokenSecurityHandler,
-                      security.PortalServerSecurityHandler)):
+        if securityHandler is not None:
             self._securityHandler = securityHandler
-        if not securityHandler is None:
-            self._referer_url = securityHandler.referer_url
-            self._token = securityHandler.token
+
         elif securityHandler is None:
             pass
         else:
-            raise AttributeError("Security Handler must type of security.AGSTokenSecurityHandler")
+            raise AttributeError("Invalid Security Handler")
+        if not securityHandler is None and \
+           hasattr(securityHandler, 'referer_url'):
+            self._referer_url = securityHandler.referer_url
         if initialize:
             self.__init()
     #----------------------------------------------------------------------
     def __init(self):
         """ loads the data into the class """
-        if self._token is None:
-            param_dict = {"f": "json"}
-        else:
-            param_dict = {"f": "json",
-                          "token" : self._token
-                          }
-        json_dict = self._do_get(self._url, param_dict,
+        params = {"f": "json"}
+        json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
         self._json_dict = json_dict
@@ -82,31 +77,41 @@ class FeatureService(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, v)
             else:
-                print k, " - attribute not implmented for Feature Service."
+                print k, " - attribute not implemented for Feature Service."
+    #----------------------------------------------------------------------
+    @property
+    def administration(self):
+        """returns the service admin object (if accessible)"""
+        from ..manageags._services import AGSService
+        url = self._url
+        res = search("/rest/", url).span()
+        addText = "/admin/"
+        part1 = url[:res[1]].lower().replace('/rest/', '')
+        part2 = url[res[1]:].lower().replace('/featureserver', ".mapserver")
+        adminURL = "%s%s%s" % (part1, addText, part2)
+        return AGSService(url=adminURL,
+                          securityHandler=self._securityHandler,
+                          proxy_url=self._proxy_url,
+                          proxy_port=self._proxy_port,
+                          initialize=False)
     #----------------------------------------------------------------------
     @property
     def itemInfo(self):
         """gets the item's info"""
-        params = {
-            "f" : "json"
-        }
-        if not self._securityHandler is None:
-            params['token'] = self._securityHandler.token
+        params = {"f" : "json"}
         url = self._url + "/info/iteminfo"
         return self._do_get(url=url, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     def downloadThumbnail(self, outPath):
         """downloads the items's thumbnail"""
         url = self._url + "/info/thumbnail"
-        params = {
-
-        }
-        if not self._securityHandler is None:
-            params['token']  = self._securityHandler.token
+        params = {}
         return self._download_file(url=url,
                             save_path=outPath,
+                            securityHandler=self._securityHandler,
                             file_name=None,
                             param_dict=params,
                             proxy_url=self._proxy_url,
@@ -117,12 +122,11 @@ class FeatureService(BaseAGSServer):
         fileName = "metadata.xml"
         url = self._url + "/info/metadata"
         params = {}
-        if not self._securityHandler is None:
-            params['token']  = self._securityHandler.token
         return self._download_file(url=url,
                                    save_path=outPath,
                                    file_name=fileName,
                                    param_dict=params,
+                                   securityHandler=self._securityHandler,
                                    proxy_url=self._proxy_url,
                                    proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -131,6 +135,13 @@ class FeatureService(BaseAGSServer):
         if self._json is None:
             self.__init()
         return self._json
+    #----------------------------------------------------------------------
+    def __iter__(self):
+        """returns the JSON response in key/value pairs"""
+        if self._json_dict is None:
+            self.__init()
+        for k,v in self._json_dict.iteritems():
+            yield [k,v]
     #----------------------------------------------------------------------
     @property
     def securityHandler(self):
@@ -143,7 +154,6 @@ class FeatureService(BaseAGSServer):
         if isinstance(value, BaseSecurityHandler):
             if isinstance(value, security.AGSTokenSecurityHandler):
                 self._securityHandler = value
-                self._token = value.token
             else:
                 pass
         elif value is None:
@@ -255,26 +265,28 @@ class FeatureService(BaseAGSServer):
             self.__init()
         self._getLayers()
         return self._layers
+    #----------------------------------------------------------------------
     def _getLayers(self):
         """ gets layers for the featuer service """
-        if self._token is None:
-            param_dict = {"f": "json"}
-        else:
-            param_dict = {"f": "json",
-                          "token" : self._token
-                          }
-        json_dict = self._do_get(self._url, param_dict)
+        params = {"f": "json"}
+
+        json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
+                                 proxy_url=self._proxy_url,
+                                 proxy_port=self._proxy_port)
         self._layers = []
         if json_dict.has_key("layers"):
             for l in json_dict["layers"]:
                 self._layers.append(
                     layer.FeatureLayer(url=self._url + "/%s" % l['id'],
-                                       securityHandler=self._securityHandler)
+                                       securityHandler=self._securityHandler,
+                                       proxy_port=self._proxy_port,
+                                       proxy_url=self._proxy_url)
                 )
     #----------------------------------------------------------------------
     @property
     def tables(self):
-        """"""
+        """lists the tables on the feature service"""
         if self._tables is None:
             self.__init()
         return self._tables
@@ -350,8 +362,6 @@ class FeatureService(BaseAGSServer):
                   "returnCountOnly": returnCountOnly,
                   "returnZ": returnZ,
                   "returnM" : returnM}
-        if not self._token is None:
-            params["token"] = self._token
         if not layerDefsFilter is None and \
            isinstance(layerDefsFilter, LayerDefinitionFilter):
             params['layerDefs'] = layerDefsFilter.filter
@@ -369,7 +379,11 @@ class FeatureService(BaseAGSServer):
            isinstance(timeFilter, TimeFilter):
             params['time'] = timeFilter.filter
 
-        res = self._do_get(url=qurl, param_dict=params)
+        res = self._do_get(url=qurl,
+                           param_dict=params,
+                           securityHandler=self._securityHandler,
+                           proxy_url=self._proxy_url,
+                           proxy_port=self._proxy_port)
         if returnIdsOnly == False and returnCountOnly == False:
             if isinstance(res, str):
                 jd = json.loads(res)

@@ -40,6 +40,8 @@ class GlobeServiceLayer(BaseAGSServer):
         """Constructor"""
         self._url = url
         self._securityHandler = securityHandler
+        if self._securityHandler is not None:
+            self._referer_url = securityHandler.referer_url
         self._proxy_port = proxy_port
         self._proxy_url = proxy_url
         if initialize:
@@ -50,9 +52,8 @@ class GlobeServiceLayer(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        if self._securityHandler is not None:
-            params['token'] = self._securityHandler.token
         json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json_dict = json_dict
@@ -64,7 +65,7 @@ class GlobeServiceLayer(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, v)
             else:
-                print k, " - attribute not implmented for Globe Service Layer."
+                print k, " - attribute not implemented for Globe Service Layer."
     #----------------------------------------------------------------------
     def __str__(self):
         """returns object as string"""
@@ -238,8 +239,7 @@ class GlobeService(BaseAGSServer):
                  initialize=False):
         """Constructor"""
         self._url = url
-        if isinstance(securityHandler, AGSTokenSecurityHandler):
-            self._securityHandler = securityHandler
+        self._securityHandler = securityHandler
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
         if initialize:
@@ -250,9 +250,8 @@ class GlobeService(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        if self._securityHandler is not None:
-            params['token'] = self._securityHandler.token
         json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json_dict = json_dict
@@ -264,7 +263,7 @@ class GlobeService(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, v)
             else:
-                print k, " - attribute not implmented for Globe Service."
+                print k, " - attribute not implemented for Globe Service."
     #----------------------------------------------------------------------
     def __str__(self):
         """returns object as string"""
@@ -281,7 +280,7 @@ class GlobeService(BaseAGSServer):
                       "layers",
                       "serviceDescription"]
         for att in attributes:
-            yield (att, getattr(self, att))
+            yield [att, getattr(self, att)]
     #----------------------------------------------------------------------
     @property
     def layers(self):
@@ -318,12 +317,3 @@ class GlobeService(BaseAGSServer):
         if self._documentInfo is None:
             self.__init()
         return self._documentInfo
-
-
-
-
-
-
-
-
-

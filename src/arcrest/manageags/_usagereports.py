@@ -35,10 +35,10 @@ class UsageReports(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._url, param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -49,7 +49,7 @@ class UsageReports(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in UsageReports."
             del k
             del v
     #----------------------------------------------------------------------
@@ -97,12 +97,12 @@ class UsageReports(BaseAGSServer):
         statistics are persisted forever.
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         url = self._url + "/settings"
         return self._do_get(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -127,7 +127,6 @@ class UsageReports(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "maxHistory" : maxHistory,
             "enabled" : enabled,
             "samplingInterval"  : samplingInterval
@@ -135,6 +134,7 @@ class UsageReports(BaseAGSServer):
         url = self._url + "/settings/edit"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -248,7 +248,6 @@ class UsageReports(BaseAGSServer):
 
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "reportname" : reportname,
             "since" : since,
 
@@ -265,6 +264,7 @@ class UsageReports(BaseAGSServer):
             params['from'] = fromValue
         res =  self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
         #  Refresh the metrics object
@@ -308,10 +308,10 @@ class UsageReport(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._url, param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -326,7 +326,7 @@ class UsageReport(BaseAGSServer):
             elif k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in manageags.UsageReport."
             del k
             del v
     #----------------------------------------------------------------------
@@ -441,12 +441,12 @@ class UsageReport(BaseAGSServer):
         }
         params = {
             "f" : "json",
-            "token": self._securityHandler.token,
             "usagereport" : json.dumps(usagereport_dict)
         }
         url = self._url + "/edit"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -455,10 +455,10 @@ class UsageReport(BaseAGSServer):
         url = self._url + "/delete"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token
         }
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -490,24 +490,11 @@ class UsageReport(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "filter" : queryFilter
         }
         url = self._url + "/query"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
-
-
-
-
-
-
-
-
-
-
-
-
-

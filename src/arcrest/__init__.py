@@ -8,11 +8,12 @@ import manageorg
 import manageags
 import manageportal
 import hostedservice
+#import webmap
+from geometryservice import *
+from enrichment import GeoEnrichment
 try:
     import arcpy
     arcpyFound = True
 except:
     arcpyFound = False
-#import webmap
-from geometryservice import *
-__version__ = "2.0.120"
+__version__ = "3.0.0"

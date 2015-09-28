@@ -1,17 +1,33 @@
-from _abstract import abstract
+
+from securityhandlerhelper import securityhandlerhelper
+import re as re
 
 dateTimeFormat = '%Y-%m-%d %H:%M'
 import arcrest
-from arcrest.agol import FeatureLayer
-from arcrest.agol import FeatureService
+
+import arcresthelper.featureservicetools as featureservicetools 
+
 from arcrest.hostedservice import AdminFeatureService
 import datetime, time
 import json
 import os
-import common 
+import arcresthelper.common as common
 import gc
 import arcpy
+from urlparse import urlparse
 
+try:
+    import pyparsing
+    pyparsingInstall = True
+    from arcresthelper import select_parser
+except:
+    pyparsingInstall = False
+
+import inspect
+    
+def lineno():
+    """Returns the current line number in our program."""
+    return inspect.currentframe().f_back.f_lineno
 #----------------------------------------------------------------------
 def trace():
     """
@@ -31,12 +47,89 @@ def trace():
     return line, filename, synerror
 
 
-class publishingtools(abstract.baseToolsClass):
+class publishingtools(securityhandlerhelper):
+    def getItemID(self,userContent,title=None, name=None, itemType=None):
+        """
+           This function retrieves the item ID if the item exist
+
+           Inputs:
+              name - the name of the item
+            userContent - a list of user contnet
+           Output:
+              string - ID of item, none if item does not exist
+        """
+        itemID = None
+        if name == None and title == None:
+            raise AttributeError('Name or Title needs to be specified')
+        for item in userContent:
+            if title is None and not name is None:
+                if item.name == name and (itemType is None or item.type == itemType):
+                    return item.id
+                
+            elif not title is None and name is None:
+                if item.title == title and (itemType is None or item.type == itemType):
+                    return item.id
+                  
+            else:
+                if item.name == name and item.title == title and (itemType is None or item.type == itemType):
+                    return item.id
+        return None          
+    def getItem(self,userContent,title=None, name=None, itemType=None):
+        """
+           This function retrieves the item ID if the item exist
+
+           Inputs:
+              name - the name of the item
+            userContent - a list of user contnet
+           Output:
+              string - ID of item, none if item does not exist
+        """
+        itemID = None
+        if name == None and title == None:
+            raise AttributeError('Name or Title needs to be specified')
+        for item in userContent:
+            if title is None and not name is None:
+                if item.name == name and (itemType is None or item.type == itemType):
+                    return item
+
+            elif not title is None and name is None:
+                if item.title == title and (itemType is None or item.type == itemType):
+                    return item
+
+            else:
+                if item.name == name and item.title == title and (itemType is None or item.type == itemType):
+                    return item
+        return None              
+    #----------------------------------------------------------------------
+    def folderExist(self, name, folders):
+        """
+           Determines if a folder exist
+
+           Inputs:
+             name - the name of the folder
+             folders - list of folders
+           Output:
+              boolean - true/false if the folder exist
+        """
+        if not name == None and not name == '':
+         
+            folderID = None
+          
+            for folder in folders:
+                if folder['title'].lower() == name.lower():
+                    return True;
+                   
+            del folders
+
+            return folderID
+
+        else:
+            return False
 
     #----------------------------------------------------------------------
     def publishMap(self,maps_info,fsInfo=None):
         itemInfo = None
-        itemID = None
+        itemId = None
         map_results = None
         replaceInfo = None
         replaceItem = None
@@ -63,17 +156,19 @@ class publishingtools(abstract.baseToolsClass):
 
                                 for fs in fsInfo:
                                     if fs is not None and replaceItem['ReplaceString'] == fs['ReplaceTag']:
-                                        replaceItem['ReplaceString'] = fs['FSInfo']['serviceurl']
-                                        replaceItem['ItemID'] = fs['FSInfo']['serviceItemId']
+                                        replaceItem['ReplaceString'] = fs['FSInfo']['url']
+                                        replaceItem['ItemID'] = fs['FSInfo']['itemId']
                                         replaceItem['ItemFolder'] = fs['FSInfo']['folderId']
+                                        if 'convertCase' in fs['FSInfo']:
+                                            replaceItem['convertCase'] = fs['FSInfo']['convertCase']
                                     elif replaceItem.has_key('ItemID'):
                                         if replaceItem.has_key('ItemFolder') == False:
 
-                                            itemID = replaceItem['ItemID']
-                                            itemInfo = admin.content.item(itemId=itemID)
-                                            if 'owner' in itemInfo:
-                                                if itemInfo['owner'] == self._securityHandler.username and 'ownerFolder' in itemInfo:
-                                                    replaceItem['ItemFolder'] = itemInfo['ownerFolder']
+                                            itemId = replaceItem['ItemID']
+                                            itemInfo = admin.content.getItem(itemId=itemId)
+                                            if itemInfo.owner:
+                                                if itemInfo.owner == self._securityHandler.username and itemInfo.ownerFolder:
+                                                    replaceItem['ItemFolder'] = itemInfo.ownerFolder
                                                 else:
                                                     replaceItem['ItemFolder'] = None
 
@@ -87,13 +182,7 @@ class publishingtools(abstract.baseToolsClass):
                 itemInfo['MapInfo']  = self._publishMap(config=map_info,
                                                    replaceInfo=replaceInfo)
                 map_results.append(itemInfo)
-                if not itemInfo is None:
-                    if not 'error' in itemInfo['MapInfo']['Results']:
-                        print "%s webmap created" % itemInfo['MapInfo']['Name']
-                    else:
-                        print str(itemInfo['MapInfo']['Results'])
-                else:
-                    print "Map not created"
+                print "%s webmap created" % itemInfo['MapInfo']['Name']
             return map_results
         except arcpy.ExecuteError:
             line, filename, synerror = trace()
@@ -104,7 +193,9 @@ class publishingtools(abstract.baseToolsClass):
                         "synerror": synerror,
                         "arcpyError": arcpy.GetMessages(2),
                                         }
-                                        )
+                                       )
+        except common.ArcRestHelperError,e:
+            raise e
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -117,14 +208,14 @@ class publishingtools(abstract.baseToolsClass):
 
         finally:
             itemInfo = None
-            itemID = None
+            itemId = None
             replaceInfo = None
             replaceItem = None
             map_info = None
             admin = None
 
             del itemInfo
-            del itemID
+            del itemId
             del replaceInfo
             del replaceItem
             del map_info
@@ -171,7 +262,7 @@ class publishingtools(abstract.baseToolsClass):
         folderId = None
         res = None
         folderContent = None
-        itemID = None
+        itemId = None
         group_ids = None
         shareResults = None
         updateParams = None
@@ -185,13 +276,12 @@ class publishingtools(abstract.baseToolsClass):
             itemJson = config['ItemJSON']
             if os.path.exists(itemJson) == False:
                 return {"Results":{"error": "%s does not exist" % itemJson}  }
-
-            update_service = config['UpdateService']
-            admin = arcrest.manageorg.Administration(securityHandler=self._securityHandler)
-            adminusercontent = admin.content.usercontent()
-            resultMap = {'Layers':[],'Tables':[],'Results':None}
+            update_service = 'FALSE'
+            
+            resultMap = {'Layers':[],'Tables':[],'Results':{}}
 
             with open(itemJson) as json_data:
+                layersInfo= {}
                 try:
                     webmap_data = json.load(json_data)
                 except:
@@ -208,6 +298,7 @@ class publishingtools(abstract.baseToolsClass):
                             if webmap_data.has_key('tables'):
                                 opLayers = webmap_data['tables']
                                 for opLayer in opLayers:
+                                    layerInfo= {}
                                     if replaceItem['SearchString'] in opLayer['url']:
 
                                         opLayer['url'] = opLayer['url'].replace(replaceItem['SearchString'],replaceItem['ReplaceString'])
@@ -216,106 +307,185 @@ class publishingtools(abstract.baseToolsClass):
                                         else:
                                             opLayer['itemId'] = None
                                             #opLayer['itemId'] = get_guid()
+                                        if replaceItem.has_key('convertCase'):
+                                            if replaceItem['convertCase'] == 'lower':
+                                                layerInfo = {}
+                                               
+                                                layerInfo['convertCase'] = replaceItem['convertCase']
+                                                layerInfo['fields'] = []
+                                                if opLayer.has_key("layerDefinition"):
+                                            
+                                                    if opLayer["layerDefinition"].has_key('drawingInfo'):
+                                                        if opLayer["layerDefinition"]['drawingInfo'].has_key('renderer'):
+                                                            if 'field1' in opLayer["layerDefinition"]['drawingInfo']['renderer']:
+                                                                opLayer["layerDefinition"]['drawingInfo']['renderer']['field1'] = opLayer["layerDefinition"]['drawingInfo']['renderer']['field1'].lower()                                                
+                                                        if opLayer["layerDefinition"]['drawingInfo'].has_key('labelingInfo'):
+                                            
+                                                            lblInfos = opLayer["layerDefinition"]['drawingInfo']['labelingInfo']
+                                                            if len(lblInfos) > 0:
+                                                                for lblInfo in lblInfos:
+                                                                    if 'labelExpression' in lblInfo:
+                                                                        result = re.findall(r"\[.*\]", lblInfo['labelExpression'])
+                                                                        if len(result)>0:
+                                                                            for res in result:
+                                                                                lblInfo['labelExpression'] = str(lblInfo['labelExpression']).replace(res,str(res).lower())
+                                            
+                                                                    if 'labelExpressionInfo' in lblInfo:
+                                                                        if 'value' in lblInfo['labelExpressionInfo']:
+                                            
+                                                                            result = re.findall(r"{.*}", lblInfo['labelExpressionInfo']['value'])
+                                                                            if len(result)>0:
+                                                                                for res in result:
+                                                                                    lblInfo['labelExpressionInfo']['value'] = str(lblInfo['labelExpressionInfo']['value']).replace(res,str(res).lower())
 
-                                        if str(update_service).upper() == "TRUE" and opLayer['itemId'] != None:
-                                            layers = []
-                                            item = admin.content.item(itemId = replaceItem['ItemID'])
-                                            response = item.itemData()
-                                            if 'layers' in response:
-                                                layers = response['layers']
-
-                                            str(opLayer['url'] ).split("/")
-
-                                            layerIdx = common.getLayerIndex(url=opLayer['url'])
-                                            if opLayer.has_key("popupInfo"):
-                                                updatedLayer = {"id" : layerIdx ,
-                                                                "popupInfo" : opLayer["popupInfo"]
-                                                                }
-                                            else:
-                                                updatedLayer = None
-
-                                            updated = False
-                                            for layer in layers:
-                                                if str(layer['id']) == str(layerIdx):
-                                                    layer = updatedLayer
-                                                    updated = True
-                                            if updated == False and not updatedLayer is None:
-                                                layers.append(updatedLayer)
-                                            if len(layers):
-                                                text = {
-                                                    "layers" :layers
-                                                }
-
-                                                itemParams = arcrest.manageorg.ItemParameter()
-                                                itemParams.type = "Feature Service"
-
-
-                                                updateResults = adminusercontent.updateItem(itemId = replaceItem['ItemID'],
-                                                                            updateItemParameters=itemParams,
-                                                                            folderId=replaceItem['ItemFolder'],
-                                                                            text=json.dumps(text))
-                                                if 'error' in updateResults:
-                                                    print updateResults
-
-                        opLayers = webmap_data['operationalLayers']
-                        for opLayer in opLayers:
-                            if replaceItem['SearchString'] in opLayer['url']:
-
-                                opLayer['url'] = opLayer['url'].replace(replaceItem['SearchString'],replaceItem['ReplaceString'])
-                                if replaceItem.has_key('ItemID'):
+                                                                    
+                                                if opLayer.has_key("popupInfo"):
+                                        
+                                                    if 'mediaInfos' in opLayer['popupInfo'] and not opLayer['popupInfo']['mediaInfos'] is None:
+                                                        for chart in opLayer['popupInfo']['mediaInfos']:
+                                                            if 'value' in chart:
+                                                                if 'normalizeField' in chart and not chart['normalizeField'] is None:
+                                                                    chart['normalizeField'] = chart['normalizeField'].lower()
+                                                                if 'fields' in chart['value']:
+                                        
+                                                                    for i in range(len(chart['value']['fields'])):
+                                                                        chart['value']['fields'][i] = str(chart['value']['fields'][i]).lower()
+                                                    if opLayer['popupInfo'].has_key("fieldInfos"):
+                                        
+                                                        for field in opLayer['popupInfo']['fieldInfos']:
+                                                            newFld = str(field['fieldName']).lower()
+                                                            if 'description' in opLayer['popupInfo']:
+                                                                opLayer['popupInfo']['description'] = common.find_replace(obj = opLayer['popupInfo']['description'], 
+                                                                                                                          find = "{" + field['fieldName'] + "}", 
+                                                                                                                          replace = "{" + newFld + "}")
+                                        
+                                        
+                                                            layerInfo['fields'].append({"PublishName":field['fieldName'],
+                                                                                        'ConvertName':newFld})                                                
+                                                            field['fieldName'] = newFld
+                                                layersInfo[opLayer['id']] = layerInfo
+                                
+                            opLayers = webmap_data['operationalLayers']
+                            for opLayer in opLayers:
+                                layerInfo= {}
+                                if replaceItem['SearchString'] in opLayer['url']:
+    
+                                    opLayer['url'] = opLayer['url'].replace(replaceItem['SearchString'],replaceItem['ReplaceString'])
+                                    if replaceItem.has_key('ItemID'):
                                         opLayer['itemId'] = replaceItem['ItemID']
-                                else:
-                                    opLayer['itemId'] = None
-                                    #opLayer['itemId'] = get_guid()
-
-                                if str(update_service).upper() == "TRUE" and opLayer['itemId'] != None:
-                                    layers = []
-                                    item = admin.content.item(itemId = replaceItem['ItemID'])
-                                    response = item.itemData()
-                                    if 'layers' in response:
-                                        layers = response['layers']
-
-                                    str(opLayer['url'] ).split("/")
-                                    layerIdx = common.getLayerIndex(url=opLayer['url'])
-                                    if opLayer.has_key("popupInfo"):
-                                        updatedLayer = {"id" : layerIdx,
-                                                        "popupInfo" : opLayer["popupInfo"]
-                                                        }
                                     else:
-                                        updatedLayer = None
-
-                                    updated = False
-                                    for layer in layers:
-                                        if str(layer['id']) == str(layerIdx):
-                                            layer = updatedLayer
-                                            updated = True
-                                    if updated == False and not updatedLayer is None:
-                                        layers.append(updatedLayer)
-                                    if len(layers):
-                                        text = {
-                                            "layers" :layers
-                                        }
-
-                                        itemParams = arcrest.manageorg.ItemParameter()
-                                        itemParams.type = "Feature Service"
-
-
-                                        updateResults = adminusercontent.updateItem(itemId = replaceItem['ItemID'],
-                                                                    updateItemParameters=itemParams,
-                                                                    folderId=replaceItem['ItemFolder'],
-                                                                    text=json.dumps(text))
-                                        if 'error' in updateResults:
-                                            print updateResults
-
+                                        opLayer['itemId'] = None
+                                        #opLayer['itemId'] = get_guid()
+                                    if replaceItem.has_key('convertCase'):
+                                        if replaceItem['convertCase'] == 'lower':
+                                            layerInfo = {}
+                                            
+                                            layerInfo['convertCase'] = replaceItem['convertCase']
+                                            layerInfo['fields'] = []
+                                            if opLayer.has_key("layerDefinition"):
+                                                
+                                                if opLayer["layerDefinition"].has_key('drawingInfo'):
+                                                    if opLayer["layerDefinition"]['drawingInfo'].has_key('renderer'):
+                                                        if 'field1' in opLayer["layerDefinition"]['drawingInfo']['renderer']:
+                                                            opLayer["layerDefinition"]['drawingInfo']['renderer']['field1'] = opLayer["layerDefinition"]['drawingInfo']['renderer']['field1'].lower()                                                
+                                                    if opLayer["layerDefinition"]['drawingInfo'].has_key('labelingInfo'):
+                                            
+                                                        lblInfos = opLayer["layerDefinition"]['drawingInfo']['labelingInfo']
+                                                        if len(lblInfos) > 0:
+                                                            for lblInfo in lblInfos:
+                                                                if 'labelExpression' in lblInfo:
+                                                                    result = re.findall(r"\[.*\]", lblInfo['labelExpression'])
+                                                                    if len(result)>0:
+                                                                        for res in result:
+                                                                            lblInfo['labelExpression'] = str(lblInfo['labelExpression']).replace(res,str(res).lower())
+                                                                    
+                                                                if 'labelExpressionInfo' in lblInfo:
+                                                                    if 'value' in lblInfo['labelExpressionInfo']:
+                                                                      
+                                                                        result = re.findall(r"{.*}", lblInfo['labelExpressionInfo']['value'])
+                                                                        if len(result)>0:
+                                                                            for res in result:
+                                                                                lblInfo['labelExpressionInfo']['value'] = str(lblInfo['labelExpressionInfo']['value']).replace(res,str(res).lower())
+                                                                                                                    
+                                            if opLayer.has_key("popupInfo"):
+                                                    
+                                                if 'mediaInfos' in opLayer['popupInfo'] and not opLayer['popupInfo']['mediaInfos'] is None:
+                                                    for k in range(len(opLayer['popupInfo']['mediaInfos'])):
+                                                        chart = opLayer['popupInfo']['mediaInfos'][k]
+                                                        if 'value' in chart:
+                                                            if 'normalizeField' in chart and not chart['normalizeField'] is None:
+                                                                chart['normalizeField'] = chart['normalizeField'].lower()
+                                                            if 'fields' in chart['value']:
+                                                                
+                                                                for i in range(len(chart['value']['fields'])):
+                                                                    chart['value']['fields'][i] = str(chart['value']['fields'][i]).lower()
+                                                            opLayer['popupInfo']['mediaInfos'][k] = chart
+                                                if opLayer['popupInfo'].has_key("fieldInfos"):
+                                                              
+                                                    for field in opLayer['popupInfo']['fieldInfos']:
+                                                        newFld = str(field['fieldName']).lower()
+                                                        if 'description' in opLayer['popupInfo']:
+                                                            opLayer['popupInfo']['description'] = common.find_replace(obj = opLayer['popupInfo']['description'], 
+                                                                               find = "{" + field['fieldName'] + "}", 
+                                                                               replace = "{" + newFld + "}")
+                                                        
+                                                                                
+                                                        layerInfo['fields'].append({"PublishName":field['fieldName'],
+                                                                                    'ConvertName':newFld})                                                
+                                                        field['fieldName'] = newFld
+                                            layersInfo[opLayer['id']] = layerInfo
+                                          
+                   
                 opLayers = webmap_data['operationalLayers']
+                resultMap['Layers'] = {}
                 for opLayer in opLayers:
                     currentID = opLayer['id']
-                   
-                    opLayer['id'] = common.getLayerName(url=opLayer['url']) + "_" + str(common.random_int_generator(maxrange = 9999))
+                             
+                    #if 'url' in opLayer:    
+                        #opLayer['id'] = common.getLayerName(url=opLayer['url']) + "_" + str(common.random_int_generator(maxrange = 9999))
+                        
+                    if 'applicationProperties' in webmap_data:
+                        if 'editing' in webmap_data['applicationProperties'] and \
+                           not webmap_data['applicationProperties']['editing'] is None:  
+                            if 'locationTracking' in webmap_data['applicationProperties']['editing'] and \
+                                not webmap_data['applicationProperties']['editing']['locationTracking'] is None: 
+                                if 'info' in webmap_data['applicationProperties']['editing']['locationTracking'] and \
+                                   not webmap_data['applicationProperties']['editing']['locationTracking']['info'] is None: 
+                                    if 'layerId' in webmap_data['applicationProperties']['editing']['locationTracking']['info']: 
+                                        if webmap_data['applicationProperties']['editing']['locationTracking']['info']['layerId'] == currentID:
+                                            webmap_data['applicationProperties']['editing']['locationTracking']['info']['layerId'] = opLayer['id']
+                        if 'viewing' in webmap_data['applicationProperties'] and \
+                           not webmap_data['applicationProperties']['viewing'] is None:                    
+                            if 'search' in webmap_data['applicationProperties']['viewing'] and \
+                                not webmap_data['applicationProperties']['viewing']['search'] is None:
+                                if 'layers' in webmap_data['applicationProperties']['viewing']['search'] and \
+                                    not webmap_data['applicationProperties']['viewing']['search']['layers'] is None: 
+                                        
+                                    for k in range(len(webmap_data['applicationProperties']['viewing']['search']['layers'])):
+                                        searchlayer =  webmap_data['applicationProperties']['viewing']['search']['layers'][k]                                  
+                                        if searchlayer['id'] == currentID:
+                                            searchlayer['id'] = opLayer['id']
+                                            if 'fields' in searchlayer and \
+                                               not searchlayer['fields'] is None:                                       
+                                                for i in range(len(searchlayer['fields'])):
+                                                    
+                                                    searchlayer['fields'][i]['Name'] = str(searchlayer['fields'][i]['Name']).lower() 
+                                            if 'field' in searchlayer and \
+                                               not searchlayer['field'] is None:                                       
+                                                searchlayer['field']['name'] = searchlayer['field']['name'].lower() 
+                                                                                                 
+                                            webmap_data['applicationProperties']['viewing']['search']['layers'][k] = searchlayer
+                                            
                     if 'applicationProperties' in webmap_data:
                         webmap_data['applicationProperties'] = common.find_replace(webmap_data['applicationProperties'], currentID, opLayer['id'])
-                  
-                    resultMap['Layers'].append({"Name":opLayer['title'],"ID":opLayer['id']})
+                    
+                    resultLayer = {"Name":opLayer['title'],
+                                  "ID":opLayer['id']
+                                  } 
+                    
+                    if currentID in layersInfo:
+                        resultLayer['FieldInfo'] = layersInfo[currentID]
+                    resultMap['Layers'][currentID] = resultLayer
 
 
                 if webmap_data.has_key('tables'):
@@ -324,11 +494,43 @@ class publishingtools(abstract.baseToolsClass):
                     for opLayer in opLayers:
                         currentID = opLayer['id']
                     
-                        opLayer['id'] = common.getLayerName(url=opLayer['url']) + "_" + str(common.random_int_generator(maxrange = 9999))
+                        #opLayer['id'] = common.getLayerName(url=opLayer['url']) + "_" + str(common.random_int_generator(maxrange = 9999))
+                        if 'applicationProperties' in webmap_data:
+                            if 'editing' in webmap_data['applicationProperties'] and \
+                               not webmap_data['applicationProperties']['editing'] is None:  
+                                if 'locationTracking' in webmap_data['applicationProperties']['editing'] and \
+                                   not webmap_data['applicationProperties']['editing']['locationTracking'] is None: 
+                                    if 'info' in webmap_data['applicationProperties']['editing']['locationTracking'] and \
+                                       not webmap_data['applicationProperties']['editing']['locationTracking']['info'] is None: 
+                                        if 'layerId' in webmap_data['applicationProperties']['editing']['locationTracking']['info']: 
+                                            if webmap_data['applicationProperties']['editing']['locationTracking']['info']['layerId'] == currentID:
+                                                webmap_data['applicationProperties']['editing']['locationTracking']['info']['layerId'] = opLayer['id']
+                            if 'viewing' in webmap_data['applicationProperties'] and \
+                               not webmap_data['applicationProperties']['viewing'] is None:                    
+                                if 'search' in webmap_data['applicationProperties']['viewing'] and \
+                                   not webmap_data['applicationProperties']['viewing']['search'] is None:
+                                    if 'layers' in webmap_data['applicationProperties']['viewing']['search'] and \
+                                       not webmap_data['applicationProperties']['viewing']['search']['layers'] is None: 
+                    
+                                        for k in range(len(webmap_data['applicationProperties']['viewing']['search']['layers'])):
+                                            searchlayer =  webmap_data['applicationProperties']['viewing']['search']['layers'][k]                                  
+                                            if searchlayer['id'] == currentID:
+                                                searchlayer['id'] = opLayer['id']
+                                                if 'fields' in searchlayer and \
+                                                   not searchlayer['fields'] is None:                                       
+                                                    for i in range(len(searchlayer['fields'])):
+                    
+                                                        searchlayer['fields'][i]['Name'] = str(searchlayer['fields'][i]['Name']).lower() 
+                                                if 'field' in searchlayer and \
+                                                   not searchlayer['field'] is None:                                       
+                                                    searchlayer['field']['name'] = searchlayer['field']['name'].lower() 
+                    
+                                                webmap_data['applicationProperties']['viewing']['search']['layers'][k] = searchlayer
+                        
                         if 'applicationProperties' in webmap_data:
                             webmap_data['applicationProperties'] = common.find_replace(webmap_data['applicationProperties'], currentID, opLayer['id'])
                                            
-                        esultMap['Tables'].append({"Name":opLayer['title'],"ID":opLayer['id']})
+                        resultMap['Tables'].append({"Name":opLayer['title'],"ID":opLayer['id']})
 
 
             name = config['Title']
@@ -369,59 +571,63 @@ class publishingtools(abstract.baseToolsClass):
             itemParams.snippet = snippet
             itemParams.description = description
             itemParams.extent = extent
+            
             itemParams.tags = tags
             itemParams.typeKeywords = ",".join(typeKeywords)
-
-            adminusercontent = admin.content.usercontent()
+            
+            admin = arcrest.manageorg.Administration(securityHandler=self.securityhandler)
+            
+            content = admin.content        
+            userInfo = content.users.user()
             userCommunity = admin.community
-            userContent = admin.content.getUserContent()
+            
+            if folderName is not None and folderName != "":               
+                if self.folderExist(name=folderName,folders=userInfo.folders) is None:
+                    res = userInfo.createFolder(name=folderName)
+                userInfo.currentFolder = folderName    
+            if 'id' in userInfo.currentFolder:
+                folderId = userInfo.currentFolder['id']
 
-            folderId = admin.content.getFolderID(name=folderName,userContent=userContent)
-            if folderId is None:
-                res = adminusercontent.createFolder(name=folderName)
-                if 'success' in res:
-                    folderId = res['folder']['id']
-                else:
-                    pass
 
-            folderContent = admin.content.getUserContent(folderId=folderId)
-
-            itemID = admin.content.getItemID(title=name,itemType='Web Map',userContent=folderContent)
-
-            if not itemID is None:
-                resultMap['Results'] = adminusercontent.updateItem(itemId=itemID,
-                                            updateItemParameters=itemParams,
-                                            folderId=folderId,
+            sea = arcrest.find.search(securityHandler=self._securityHandler)
+            items = sea.findItem(title=name, itemType=itemType,searchorg=False)
+            
+            if items['total'] >= 1:
+                itemId = items['results'][0]['id']            
+            if not itemId is None:
+                item = content.getItem(itemId).userItem
+                results = item.updateItem(itemParameters=itemParams,
                                             text=json.dumps(webmap_data))
-
+                if 'error' in results:
+                    return results
             else:
+                try:
+                    item = userInfo.addItem(itemParameters=itemParams,
+                            overwrite=True,
+                            url=None,
+                            relationshipType=None,
+                            originItemId=None,
+                            destinationItemId=None,
+                            serviceProxyParams=None,
+                            metadata=None,
+                            text=json.dumps(webmap_data))
+                    group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+                    shareResults = userInfo.shareItems(items=item.id,
+                                                       groups=','.join(group_ids),
+                                                       everyone=everyone,
+                                                       org=org)
+                    updateParams = arcrest.manageorg.ItemParameter()
+                    updateParams.title = name
+                    updateResults = item.updateItem(itemParameters=updateParams)                    
+                except Exception,e: 
+                    print e
+            if item is None:
+                return "Item could not be added"
 
-                resultMap['Results'] = adminusercontent.addItem( itemParameters=itemParams,
-                        overwrite=True,
-                        folder=folderId,
-                        url=None,
-                        relationshipType=None,
-                        originItemId=None,
-                        destinationItemId=None,
-                        serviceProxyParams=None,
-                        metadata=None,
-                        text=json.dumps(webmap_data))
-
-
-            if not 'error' in resultMap['Results']:
-
-                group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                shareResults = adminusercontent.shareItems(items=resultMap['Results']['id'],
-                                       groups=','.join(group_ids),
-                                       everyone=everyone,
-                                       org=org)
-                updateParams = arcrest.manageorg.ItemParameter()
-                updateParams.title = name
-                updateResults = adminusercontent.updateItem(itemId=resultMap['Results']['id'],
-                                                            updateItemParameters=updateParams,
-                                                            folderId=folderId)
-                resultMap['folderId'] = folderId
-                resultMap['Name'] = name
+           
+            resultMap['Results']['itemId'] = item.id
+            resultMap['folderId'] = folderId
+            resultMap['Name'] = name
             return resultMap
 
         except arcpy.ExecuteError:
@@ -483,7 +689,7 @@ class publishingtools(abstract.baseToolsClass):
             folderId = None
             res = None
             folderContent = None
-            itemID = None
+            itemId = None
             group_ids = None
             shareResults = None
             updateParams = None
@@ -526,7 +732,7 @@ class publishingtools(abstract.baseToolsClass):
             del folderId
             del res
             del folderContent
-            del itemID
+            del itemId
             del group_ids
             del shareResults
             del updateParams
@@ -556,7 +762,7 @@ class publishingtools(abstract.baseToolsClass):
                 operationalLayers = []
                 tableLayers = []
                 for webmap in webmaps:
-                    item = admin.content.item(itemId=webmap)
+                    item = admin.content.getItem(itemId=webmap)
                     response = item.itemData()
                     if 'operationalLayers' in response:
 
@@ -580,9 +786,9 @@ class publishingtools(abstract.baseToolsClass):
                     itemInfo = {"ReplaceTag":"{WebMap}" }
 
                 itemInfo['MapInfo'] = self._publishMap(config=map_info,
-                                                                       replaceInfo=None,
-                                                                       operationalLayers=operationalLayers,
-                                                                       tableLayers=tableLayers)
+                                                        replaceInfo=None,
+                                                        operationalLayers=operationalLayers,
+                                                        tableLayers=tableLayers)
 
 
                 map_results.append(itemInfo)
@@ -655,6 +861,10 @@ class publishingtools(abstract.baseToolsClass):
         fs = None
         res = None
         resItm = None
+        if self.securityhandler.is_portal:
+            url = self.securityhandler.org_url
+        else:
+            url = 'http://www.arcgis.com'
         try:
             res = []
             if isinstance(fs_config, list):
@@ -665,10 +875,10 @@ class publishingtools(abstract.baseToolsClass):
                     else:
                         resItm = {"ReplaceTag":"{FeatureService}" }
 
-                    resItm['FSInfo'] = self._publishFSfromConfig(config=fs)
+                    resItm['FSInfo'] = self._publishFSFromMXD(config=fs, url=url)
                     
-                    if 'serviceurl' in resItm['FSInfo']:
-                        print "%s created" % resItm['FSInfo']['serviceurl']
+                    if not resItm['FSInfo'] is None and 'url' in resItm['FSInfo']:
+                        print "%s created" % resItm['FSInfo']['url']
                         res.append(resItm)
                     else:
                         print str(resItm['FSInfo'])
@@ -680,10 +890,10 @@ class publishingtools(abstract.baseToolsClass):
                 else:
                     resItm = {"ReplaceTag":"{FeatureService}" }
 
-                resItm['FSInfo'] = self._publishFSfromConfig(config=fs_config)
+                resItm['FSInfo'] = self._publishFSFromMXD(config=fs_config, url=url)
               
-                if 'serviceurl' in resItm['FSInfo']:
-                    print "%s created" % resItm['FSInfo']['serviceurl']
+                if 'url' in resItm['FSInfo']:
+                    print "%s created" % resItm['FSInfo']['url']
                     res.append(resItm)
                 else:
                     print str(resItm['FSInfo'])              
@@ -699,6 +909,8 @@ class publishingtools(abstract.baseToolsClass):
                         "arcpyError": arcpy.GetMessages(2),
                                         }
                                         )
+        except common.ArcRestHelperError,e:
+            raise e
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -718,7 +930,73 @@ class publishingtools(abstract.baseToolsClass):
 
             gc.collect()
     #----------------------------------------------------------------------
-    def _publishFSfromConfig(self,config):
+    def publishFeatureCollections(self,configs):
+        """
+            publishs a feature service from a mxd
+            Inputs:
+                feature_service_config: Json file with list of feature service publishing details
+            Output:
+                feature service item information
+
+        """
+        config = None
+        res = None
+        resItm = None
+        try:
+            res = []
+            if isinstance(configs, list):
+                for config in configs:
+                    if config.has_key('ReplaceTag'):
+
+                        resItm = {"ReplaceTag":config['ReplaceTag'] }
+                    else:
+                        resItm = {"ReplaceTag":"{FeatureService}" }
+
+                    if 'Zip' in config:
+                        resItm['FCInfo'] = self._publishFeatureCollection(config=config)
+                
+
+                    if not resItm['FCInfo'] is None and 'id' in resItm['FCInfo']:
+                        print "%s feature collection created" % resItm['FCInfo']['id']
+                        res.append(resItm)
+                    else:
+                        print str(resItm['FCInfo'])
+
+           
+            return res
+        except arcpy.ExecuteError:
+            line, filename, synerror = trace()
+            raise common.ArcRestHelperError({
+                "function": "publishFeatureCollections",
+                "line": line,
+                "filename":  filename,
+                "synerror": synerror,
+                "arcpyError": arcpy.GetMessages(2),
+            }
+                                            )
+        except common.ArcRestHelperError,e:
+            raise e
+        except:
+            line, filename, synerror = trace()
+            raise common.ArcRestHelperError({
+                "function": "publishFeatureCollections",
+                "line": line,
+                "filename":  filename,
+                "synerror": synerror,
+            }
+                                            )
+
+        finally:
+            resItm = None
+            config = None
+
+            del resItm
+            del config
+
+            gc.collect()
+    
+    #----------------------------------------------------------------------
+    def _publishFSFromMXD(self,config,url='http://www.arcgis.com'):
         mxd = None
         q = None
         everyone = None
@@ -742,7 +1020,7 @@ class publishingtools(abstract.baseToolsClass):
         folderId = None
         res = None
         folderContent = None
-        itemID = None
+        itemId = None
         resultSD = None
         publishParameters = None
         resultFS = None
@@ -761,8 +1039,11 @@ class publishingtools(abstract.baseToolsClass):
         definition = None
         try:
             # Report settings
-            mxd = config['Mxd']
-
+            dataFle = None
+            if 'Mxd' in config:
+                dataFile = config['Mxd']
+            elif 'Zip' in config:
+                dataFile = config['Zip']
             # Service settings
             service_name = config['Title']
 
@@ -770,14 +1051,17 @@ class publishingtools(abstract.baseToolsClass):
             org = config['ShareOrg']
             groupNames = config['Groups']  #Groups are by ID. Multiple groups comma separated
             if config.has_key('EnableEditTracking'):
+                print "enableEditTracking parameter has been deprecated, please add a definition section to the config"                
                 enableEditTracking = config['EnableEditTracking']
             else:
-                print "Please add an EnableEditTracking parameter to your feature service section"
+                #print "Please add an EnableEditTracking parameter to your feature service section"
                 enableEditTracking = False
             folderName = config['Folder']
             thumbnail = config['Thumbnail']
 
             if 'Capabilities' in config:
+                print "Capabilities parameter has been deprecated, please add a definition section to the config"
+                
                 capabilities = config['Capabilities']
             if 'Definition' in config:
                 definition = config['Definition']
@@ -803,222 +1087,266 @@ class publishingtools(abstract.baseToolsClass):
             service_name_safe = service_name_safe.replace(':','_')
             service_name_safe = service_name_safe.replace('-','_')
 
-            if os.path.exists(path=mxd) == False:
-                raise ValueError("MXD does not exit")
-
-            sd_Info = arcrest.common.servicedef.MXDtoFeatureServiceDef(mxd_path=mxd,
-                                                                 service_name=service_name_safe,
-                                                                 tags=None,
-                                                                 description=None,
-                                                                 folder_name=None,
-                                                                 capabilities=capabilities,
-                                                                 maxRecordCount=maxRecordCount,
-                                                                 server_type='MY_HOSTED_SERVICES')
+            if os.path.exists(path=dataFile) == False:
+                raise ValueError("data file does not exit")
+           
+            extension = os.path.splitext(dataFile)[1]
+            
+            if (extension == ".mxd"):
+                dataFileType = "serviceDefinition"
+                searchType = "Service Definition"
+                sd_Info = arcrest.common.servicedef.MXDtoFeatureServiceDef(mxd_path=dataFile,
+                                                                     service_name=service_name_safe,
+                                                                     tags=None,
+                                                                     description=None,
+                                                                     folder_name=None,
+                                                                     capabilities=capabilities,
+                                                                     maxRecordCount=maxRecordCount,
+                                                                     server_type='MY_HOSTED_SERVICES',
+                                                                     url=url)
+                publishParameters = arcrest.manageorg.PublishSDParmaeters(tags=sd_Info['tags'],
+                                                                          overwrite='true')                
+            elif (extension == ".zip"):
+                dataFileType = "Shapefile"
+                searchType = "Shapefile"
+                sd_Info = {'servicedef':dataFile,'tags':config['Tags']}
+                description = ""
+                if 'Description' in config:
+                    description = config['Description']                 
+                publishParameters = arcrest.manageorg.PublishShapefileParameter(name=service_name,
+                                                                            layerInfo={'capabilities':capabilities},
+                                                                            description=description)
+                if 'hasStaticData' in definition:
+                    publishParameters.hasStaticData = definition['hasStaticData']
 
             if sd_Info is None:
-                return
+                print "Publishing SD or Zip not valid"
+                raise common.ArcRestHelperError({
+                    "function": "_publishFsFromMXD",
+                    "line": lineno(),
+                    "filename":  'publishingtools.py',
+                    "synerror": "Publishing SD or Zip not valid"
+                })                   
 
-            admin = arcrest.manageorg.Administration(securityHandler=self._securityHandler)
+            admin = arcrest.manageorg.Administration(securityHandler=self.securityhandler)
 
 
             itemParams = arcrest.manageorg.ItemParameter()
             itemParams.title = service_name
             itemParams.thumbnail = thumbnail
-            itemParams.type = "Service Definition"
+            itemParams.type = searchType
             itemParams.overwrite = True
 
-            adminusercontent = admin.content.usercontent()
+            content = admin.content
+
+            userInfo = content.users.user()
             userCommunity = admin.community
-            userContent = admin.content.getUserContent()
 
-            folderId = admin.content.getFolderID(name=folderName,userContent=userContent)
-            if folderId is None:
-                res = adminusercontent.createFolder(name=folderName)
-                if 'success' in res:
-                    folderId = res['folder']['id']
-                else:
-                    pass
+            if folderName is not None and folderName != "":               
+                if self.folderExist(name=folderName,folders=userInfo.folders) is None:
+                    res = userInfo.createFolder(name=folderName)
+                userInfo.currentFolder = folderName    
+            if 'id' in userInfo.currentFolder:
+                folderId = userInfo.currentFolder['id']
+            
+            sea = arcrest.find.search(securityHandler=self._securityHandler)
+            items = sea.findItem(title=service_name, itemType=searchType,searchorg=False)
 
-            #q = "title:\""+ service_name + "\"AND owner:\"" + self._securityHandler.username + "\" AND type:\"" + "Service Definition" + "\""
-
-            #items = admin.query(q=q, bbox=None, start=1, num=10, sortField=None,
-                       #sortOrder="asc")
-
-            #if items['total'] >= 1:
-                #pass
-            folderContent = admin.content.getUserContent(folderId=folderId)
-
-            itemID = admin.content.getItemID(title=service_name,itemType='Service Definition',userContent=folderContent)
-            if not itemID is None:
-                resultSD = adminusercontent.updateItem(itemId=itemID,
-                                            updateItemParameters=itemParams,
-                                            folderId=folderId,
-                                            filePath=sd_Info['servicedef'])
+            if items['total'] >= 1:
+                itemId = items['results'][0]['id']  
+            
+            defItem = None
+            
+            if not itemId is None:
+                defItem = content.getItem(itemId).userItem
+                resultSD = defItem.updateItem(itemParameters=itemParams,
+                                            data=sd_Info['servicedef'])
+                if 'error' in resultSD:
+                    return resultSD
 
             else:
+                try:
+                    defItem = userInfo.addItem(itemParameters=itemParams,
+                            filePath=sd_Info['servicedef'],
+                            overwrite=True,
+                            url=None,
+                            text=None,
+                            relationshipType=None,
+                            originItemId=None,
+                            destinationItemId=None,
+                            serviceProxyParams=None,
+                            metadata=None)
+                except Exception,e: 
+                    print e
+                if defItem is None:
+                    return "Item could not be added "
 
-                resultSD = adminusercontent.addItem( itemParameters=itemParams,
-                        filePath=sd_Info['servicedef'],
-                        overwrite=True,
-                        folder=folderId,
-                        url=None,
-                        text=None,
-                        relationshipType=None,
-                        originItemId=None,
-                        destinationItemId=None,
-                        serviceProxyParams=None,
-                        metadata=None)
+ 
+            try:
+                serviceItem = userInfo.publishItem(
+                    fileType=dataFileType,
+                    itemId=defItem.id,
+                    publishParameters=publishParameters,
+                    overwrite = True,
+                    wait=True)
+            except Exception, e:
+                print "Overwrite failed"
+                
+                sea = arcrest.find.search(securityHandler=self._securityHandler)
+                items = sea.findItem(title =service_name, itemType='Feature Service',searchorg=False)
+              
+                if items['total'] >= 1:
+                    itemId = items['results'][0]['id']
 
+                else:
+                
+                    sea = arcrest.find.search(securityHandler=self._securityHandler)
+                    items = sea.findItem(title =service_name_safe, itemType='Feature Service',searchorg=False)
 
-            if not 'error' in resultSD:
-                publishParameters = arcrest.manageorg.PublishSDParmaeters(tags=sd_Info['tags'],overwrite='true')
-                #itemID = admin.content.getItemID(title=service_name,itemType='Feature Service',userContent=folderContent)
-                #if not itemID is None:
-                    #delres=adminusercontent.deleteItems(items=itemID)
-
-                resultFS = adminusercontent.publishItem(
-                    fileType="serviceDefinition",
-                    itemId=resultSD['id'],
-                    publishParameters=publishParameters)
-
-                if 'services' in resultFS:
-                    if len(resultFS['services']) > 0:
-
-                        if 'error' in resultFS['services'][0]:
-                            print "            Overwrite failed, attempting to delete, then recreate"
-
-                            q = "title:\""+ service_name + "\"AND owner:\"" + self._securityHandler.username + "\" AND type:\"" + "Feature Service" + "\""
-                            items = admin.query(q=q, bbox=None, start=1, num=10, sortField=None,
-                                       sortOrder="asc")
-                            if items['total'] >= 1:
-                                itemID = items['results'][0]['id']
-
-                            else:
-                                q = "title:\""+ service_name_safe + "\"AND owner:\"" + self._securityHandler.username + "\" AND type:\"" + "Feature Service" + "\""
-                                items = admin.query(q=q, bbox=None, start=1, num=10, sortField=None,
-                                                                      sortOrder="asc")
-                                if items['total'] >= 1:
-                                    itemID = items['results'][0]['id']
-                                #itemID = admin.content.getItemID(title=service_name,itemType='Feature Service',userContent=folderContent)
-                                #if  itemID is None:
-                                    #itemID = admin.content.getItemID(title=service_name_safe,itemType='Feature Service',userContent=folderContent)
-
-                            if not itemID is None:
-                                delres=adminusercontent.deleteItems(items=itemID)
+                    if items['total'] >= 1:
+                        itemId = items['results'][0]['id']
+                    
+                if not itemId is None:
+                    existingItem = admin.content.getItem(itemId = itemId).userItem        
+                    if existingItem.url is not None:
+                        adminFS = AdminFeatureService(url=existingItem.url, securityHandler=self._securityHandler)
+                        cap = str(adminFS.capabilities)
+                        existingDef = {}
+                    
+                        if 'Sync' in cap:
+                            print "Disabling Sync"
+                            capItems = cap.split(',')
+                            if 'Sync' in capItems:
+                                capItems.remove('Sync')
+                
+                            existingDef['capabilities'] = ','.join(capItems)
+                            enableResults = adminFS.updateDefinition(json_dict=existingDef)
+                    
+                            if 'error' in enableResults:
+                                delres = userInfo.deleteItems(items=existingItem.id)
                                 if 'error' in delres:
                                     print delres
                                     return delres
-                                print "            Delete successful"
+                                print "Delete successful"    
                             else:
-                                print "            Item cannot be found"
-
-                            resultFS = adminusercontent.publishItem(
-                                           fileType="serviceDefinition",
-                                           itemId=resultSD['id'],
-                                           publishParameters=publishParameters)
-
-                        if 'error' in resultFS:
-                            return resultFS
-                        #if 'services' in resultFS:
-                            #if resultFS['services']['success']     == 'false':
-                                #return
-                        status = adminusercontent.status(itemId=resultFS['services'][0]['serviceItemId'],
-                                                         jobId=resultFS['services'][0]['jobId'],
-                                                         jobType='publish')
-                        if 'error' in status:
-                            print  "            %s" % status
-                        elif 'status' in status:
-                            while status['status'] == 'processing' or status['status'] == 'partial':
-                                time.sleep(.5)
-                                status = adminusercontent.status(itemId=resultFS['services'][0]['serviceItemId'],
-                                                                                     jobId=resultFS['services'][0]['jobId'],
-                                                                                             jobType='publish')
-                                if 'error' in status:
-                                    print status
-                            if status['status'] == 'failed':
-                                print "            Overwrite failed, attempting to delete, then recreate"
-
-                                delres=adminusercontent.deleteItems(items=resultFS['services'][0]['serviceItemId'])
-                                if 'error' in delres:
-                                    print delres
-                                    return delres
-                                print "            Delete successful"
-
-                                resultFS = adminusercontent.publishItem(
-                                                fileType="serviceDefinition",
-                                                itemId=resultSD['id'],
-                                                publishParameters=publishParameters)
-                                if 'error' in resultFS:
-                                    return resultFS
-                                status = adminusercontent.status(itemId=resultFS['services'][0]['serviceItemId'],
-                                                                                     jobId=resultFS['services'][0]['jobId'],
-                                                                                     jobType='publish')
-                                if 'error' in status:
-                                    print status
-                                    return status
-                                while status['status'] == 'processing' or status['status'] == 'partial':
-                                    time.sleep(.5)
-                                    status = adminusercontent.status(itemId=resultFS['services'][0]['serviceItemId'],
-                                                                                         jobId=resultFS['services'][0]['jobId'],
-                                                                                                 jobType='publish')
-                                    if 'error' in status:
-                                        print status
-                                        return status
-                            if status['status'] == 'completed':
-
-                                group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                                shareResults = adminusercontent.shareItems(items=resultFS['services'][0]['serviceItemId'],
-                                                       groups=','.join(group_ids),
-                                                       everyone=everyone,
-                                                       org=org)
-                                updateParams = arcrest.manageorg.ItemParameter()
-                                updateParams.title = service_name
-                                updateResults = adminusercontent.updateItem(itemId=resultFS['services'][0]['serviceItemId'],
-                                                                            updateItemParameters=updateParams,
-                                                                            folderId=folderId)
-                                adminFS = AdminFeatureService(url=resultFS['services'][0]['serviceurl'], securityHandler=self._securityHandler)
-
-                                if enableEditTracking == True or str(enableEditTracking).upper() == 'TRUE':
-
-                                    json_dict = {'editorTrackingInfo':{}}
-                                    json_dict['editorTrackingInfo']['allowOthersToDelete'] = True
-                                    json_dict['editorTrackingInfo']['allowOthersToUpdate'] = True
-                                    json_dict['editorTrackingInfo']['enableEditorTracking'] = True
-                                    json_dict['editorTrackingInfo']['enableOwnershipAccessControl'] = False
-
-                                    enableResults = adminFS.updateDefinition(json_dict=json_dict)
-                                    if 'error' in enableResults:
-                                        resultFS['services'][0]['messages'] = enableResults
-
-                                    json_dict = {'editFieldsInfo':{}}
-
-                                    json_dict['editFieldsInfo']['creationDateField'] = ""
-                                    json_dict['editFieldsInfo']['creatorField'] = ""
-                                    json_dict['editFieldsInfo']['editDateField'] = ""
-                                    json_dict['editFieldsInfo']['editorField'] = ""
-                                    layers = adminFS.layers
-                                    for layer in layers:
-                                        layUpdateResult = layer.addToDefinition(json_dict=json_dict)
-                                        if 'error' in layUpdateResult:
-                                            resultFS['services'][0]['messages'] = resultFS['services'][0]['messages'] + "|" + layUpdateResult['error']
-
-
-                                if definition is not None:
-                                    enableResults = adminFS.updateDefinition(json_dict=definition)
-                                    if 'error' in enableResults:
-                                        resultFS['services'][0]['messages'] = enableResults
-
-                                resultFS['services'][0]['folderId'] = folderId
-                                return resultFS['services'][0]
-
+                                print "Sync Disabled"
                         else:
-                            return status
+                            print "Attempting to delete"
+                            delres = userInfo.deleteItems(items=existingItem.id)
+                            if 'error' in delres:
+                                print delres
+                                return delres
+                            print "Delete successful"                                    
+                        adminFS = None
+                        del adminFS                                  
                     else:
-                        return resultFS
+                        print "Attempting to delete"
+                        delres = userInfo.deleteItems(items=existingItem.id)
+                        if 'error' in delres:
+                            print delres
+                            return delres
+                        print "Delete successful"                                
                 else:
-                    return resultFS
-            else:
-                return resultSD
+                    print "Item exist and cannot be found, probably owned by another user."
+                    raise common.ArcRestHelperError({
+                        "function": "_publishFsFromConfig",
+                        "line": lineno(),
+                        "filename":  'publishingtools.py',
+                        "synerror": "Item exist and cannot be found, probably owned by another user."
+                    }
+                    )       
+
+                try:
+                    serviceItem = userInfo.publishItem(
+                        fileType=dataFileType,
+                        itemId=defItem.id,
+                        overwrite = True,
+                        publishParameters=publishParameters,
+                        wait=True)
+                except Exception, e:
+           
+                    print "Overwrite failed, deleting"
+                    delres = userInfo.deleteItems(items=existingItem.id)  
+                    if 'error' in delres:
+                        print delres
+                        return delres
+                     
+                    print "Delete successful"      
+                    try:
+                        serviceItem = userInfo.publishItem(
+                            fileType=dataFileType,
+                            itemId=defItem.id,
+                            overwrite = True,
+                            publishParameters=publishParameters,
+                            wait=True)
+                    except Exception, e:
+                        return e
+                    
+            results = {
+                "url": serviceItem.url,
+                "folderId": folderId,
+                "itemId": serviceItem.id,
+                "convertCase": self._featureServiceFieldCase,
+                "messages":""
+            }            
+            group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+            shareResults = userInfo.shareItems(items=serviceItem.id,
+                                    groups=','.join(group_ids),
+                                    everyone=everyone,
+                                    org=org)
+            updateParams = arcrest.manageorg.ItemParameter()
+            updateParams.title = service_name
+            updateResults = serviceItem.updateItem(itemParameters=updateParams)
+            adminFS = AdminFeatureService(url=serviceItem.url, securityHandler=self._securityHandler)
+
+            if enableEditTracking == True or str(enableEditTracking).upper() == 'TRUE':
+              
+                json_dict = {'editorTrackingInfo':{}}
+                json_dict['editorTrackingInfo']['allowOthersToDelete'] = True
+                json_dict['editorTrackingInfo']['allowOthersToUpdate'] = True
+                json_dict['editorTrackingInfo']['enableEditorTracking'] = True
+                json_dict['editorTrackingInfo']['enableOwnershipAccessControl'] = False
+
+                enableResults = adminFS.updateDefinition(json_dict=json_dict)
+                if 'error' in enableResults:
+                    results['messages'] += enableResults
+
+                json_dict = {'editFieldsInfo':{}}
+
+                json_dict['editFieldsInfo']['creationDateField'] = ""
+                json_dict['editFieldsInfo']['creatorField'] = ""
+                json_dict['editFieldsInfo']['editDateField'] = ""
+                json_dict['editFieldsInfo']['editorField'] = ""
+                    
+                layers = adminFS.layers
+                tables = adminFS.tables
+                for layer in layers:
+                    if layer.canModifyLayer is None or layer.canModifyLayer == True:
+                        if layer.editFieldsInfo is None:
+                            layUpdateResult = layer.addToDefinition(json_dict=json_dict)
+                            if 'error' in layUpdateResult:
+                               
+                                layUpdateResult['error']['layerid'] = layer.id
+                                results['messages'] += layUpdateResult['error']
+                if not tables is None:
+                    for layer in tables:
+                        if layer.canModifyLayer is None or layer.canModifyLayer == True:
+                            if layer.editFieldsInfo is None:
+                                layUpdateResult = layer.addToDefinition(json_dict=json_dict)
+                                if 'error' in layUpdateResult:
+                                   
+                                    layUpdateResult['error']['layerid'] = layer.id
+                                    results['messages'] += layUpdateResult['error']                                        
+
+
+            if definition is not None:
+                enableResults = adminFS.updateDefinition(json_dict=definition)
+                if 'error' in enableResults:
+                    results['messages'] += enableResults
+        
+            return results
+      
+
         except arcpy.ExecuteError:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -1058,13 +1386,13 @@ class publishingtools(abstract.baseToolsClass):
             sd_Info = None
             admin = None
             itemParams = None
-            adminusercontent = None
+           
             userCommunity = None
             userContent = None
             folderId = None
             res = None
             folderContent = None
-            itemID = None
+            itemId = None
             resultSD = None
             publishParameters = None
             resultFS = None
@@ -1103,13 +1431,13 @@ class publishingtools(abstract.baseToolsClass):
             del sd_Info
             del admin
             del itemParams
-            del adminusercontent
+            
             del userCommunity
             del userContent
             del folderId
             del res
             del folderContent
-            del itemID
+            del itemId
             del resultSD
             del publishParameters
             del resultFS
@@ -1147,28 +1475,32 @@ class publishingtools(abstract.baseToolsClass):
 
                     for mapDet in map_info:
                         if mapDet.has_key('ReplaceTag'):
-                            if mapDet is not None and replaceItem['ReplaceString'] == mapDet['ReplaceTag'] and replaceItem['ReplaceType'] == 'Map':
+                            if 'ReplaceString' in replaceItem:
+                                if mapDet is not None and replaceItem['ReplaceString'] == mapDet['ReplaceTag'] and \
+                                   replaceItem['ReplaceType'] == 'Map':
+    
+                                    replaceItem['ItemID'] = mapDet['MapInfo']['Results']['itemId']
+                                    replaceItem['ItemFolder'] = mapDet['MapInfo']['folderId']
+                                    replaceItem['LayerInfo'] = mapDet['MapInfo']['Layers']
+                                elif mapDet is not None and replaceItem['ReplaceType'] == 'Layer':
+                                    repInfo = replaceItem['ReplaceString'].split("|")
+                                    if len(repInfo) == 2:
+                                        if repInfo[0] == mapDet['ReplaceTag']:
+                                            for key,value in mapDet['MapInfo']['Layers'].iteritems():
+                                                if value["Name"] == repInfo[1]:
+                                                    replaceItem['ReplaceString'] = value["ID"]
 
-                                replaceItem['ItemID'] = mapDet['MapInfo']['Results']['id']
-                                replaceItem['ItemFolder'] = mapDet['MapInfo']['folderId']
-                            elif mapDet is not None and replaceItem['ReplaceType'] == 'Layer':
-                                repInfo = replaceItem['ReplaceString'].split("|")
-                                if len(repInfo) == 2:
-                                    if repInfo[0] == mapDet['ReplaceTag']:
-                                        for lay in  mapDet['MapInfo']['Layers']:
-                                            if lay["Name"] == repInfo[1]:
-                                                replaceItem['ReplaceString'] = lay["ID"]
-
-                            elif replaceItem.has_key('ItemID'):
+                            if replaceItem.has_key('ItemID'):
                                 if replaceItem.has_key('ItemFolder') == False:
 
                                     itemId = replaceItem['ItemID']
-                                    itemInfo = admin.content.item(itemId=itemId)
-                                    if 'owner' in itemInfo:
-                                        if itemInfo['owner'] == self._securityHandler.username and 'ownerFolder' in itemInfo:
-                                            replaceItem['ItemFolder'] = itemInfo['ownerFolder']
-                                        else:
-                                            replaceItem['ItemFolder'] = None
+                                 
+                                    itemInfo = admin.content.getItem(itemId=itemId)
+                                   
+                                    if itemInfo.owner == self._securityHandler.username and itemInfo.ownerFolder:
+                                        replaceItem['ItemFolder'] = itemInfo['ownerFolder']
+                                    else:
+                                        replaceItem['ItemFolder'] = None
 
 
             if appDet.has_key('ReplaceTag'):
@@ -1189,11 +1521,11 @@ class publishingtools(abstract.baseToolsClass):
 
             if not itemInfo['AppInfo']  is None:
                 if not 'error' in itemInfo['AppInfo']['Results'] :
-                    print "            %s app created" % itemInfo['AppInfo']['Name']
+                    print "%s app created" % itemInfo['AppInfo']['Name']
                 else:
-                    print "            " + str(itemInfo['AppInfo']['Results'])
+                    print str(itemInfo['AppInfo']['Results'])
             else:
-                print "            " + "App was not created"
+                print "App was not created"
             return itemInfo
         except arcpy.ExecuteError:
             line, filename, synerror = trace()
@@ -1203,8 +1535,9 @@ class publishingtools(abstract.baseToolsClass):
                         "filename":  filename,
                         "synerror": synerror,
                         "arcpyError": arcpy.GetMessages(2),
-                                        }
-                                        )
+                                        } )
+        except common.ArcRestHelperError, e:
+            raise e                                               
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -1251,6 +1584,8 @@ class publishingtools(abstract.baseToolsClass):
                         "arcpyError": arcpy.GetMessages(2),
                                         }
                                         )
+        except (common.ArcRestHelperError), e:
+            raise e        
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -1275,7 +1610,7 @@ class publishingtools(abstract.baseToolsClass):
         extent = None
         itemJson = None
         admin = None
-        adminusercontent = None
+        
         json_data = None
         itemData = None
         replaceItem = None
@@ -1296,7 +1631,7 @@ class publishingtools(abstract.baseToolsClass):
         res = None
         folderId = None
         folderContent = None
-        itemID = None
+        itemId = None
         group_ids = None
         shareResults = None
         updateParams = None
@@ -1304,7 +1639,7 @@ class publishingtools(abstract.baseToolsClass):
         updateResults = None
         portal = None
         try:
-            resultApp = {'Results':None}
+            resultApp = {'Results':{}}
             name = ''
             tags = ''
             description = ''
@@ -1315,8 +1650,18 @@ class publishingtools(abstract.baseToolsClass):
 
                 return {"Results":{"error": "%s does not exist" % itemJson}  }
             admin = arcrest.manageorg.Administration(securityHandler=self._securityHandler)
-
-            adminusercontent = admin.content.usercontent()
+            content = admin.content        
+            userInfo = content.users.user()
+            userCommunity = admin.community
+    
+            folderName = config['Folder']
+            if folderName is not None and folderName != "":               
+                if self.folderExist(name=folderName,folders=userInfo.folders) is None:
+                    res = userInfo.createFolder(name=folderName)
+                userInfo.currentFolder = folderName 
+            if 'id' in userInfo.currentFolder:
+                folderId = userInfo.currentFolder['id']
+            
             if os.path.exists(itemJson):
                 with open(itemJson) as json_data:
                     try:
@@ -1334,12 +1679,17 @@ class publishingtools(abstract.baseToolsClass):
                                             itemData['folderId'] = replaceItem['ItemFolder']
                         elif replaceItem['ReplaceType'] == 'Layer' and 'ReplaceString' in replaceItem:
                             itemData = common.find_replace(itemData,replaceItem['SearchString'],replaceItem['ReplaceString'])
-
+                        elif replaceItem['ReplaceType'] == 'Folder':
+                            if 'id' in  userInfo.currentFolder:
+                                folderID = userInfo.currentFolder['id']
+                            else:
+                                folderID = None
+                            itemData = common.find_replace(itemData,replaceItem['SearchString'],folderID)
                         elif replaceItem['ReplaceType'] == 'Global':
                             itemData = common.find_replace(itemData,replaceItem['SearchString'],replaceItem['ReplaceString'])
 
             else:
-                print "%s does not exist." %itemJson
+                print "%s does not exist." % itemJson
                 itemData = None
 
             name = config['Title']
@@ -1361,8 +1711,7 @@ class publishingtools(abstract.baseToolsClass):
             everyone = config['ShareEveryone']
             org = config['ShareOrg']
             groupNames = config['Groups']  #Groups are by ID. Multiple groups comma separated
-
-            folderName = config['Folder']
+         
             url = config['Url']
             thumbnail = config['Thumbnail']
 
@@ -1380,62 +1729,54 @@ class publishingtools(abstract.baseToolsClass):
             itemParams.snippet = snippet
             itemParams.description = description
             itemParams.typeKeywords = ",".join(typeKeywords)
-
-            adminusercontent = admin.content.usercontent()
-            userCommunity = admin.community
-            userContent = admin.content.getUserContent()
-
-            folderId = admin.content.getFolderID(name=folderName,userContent=userContent)
-            if folderId is None:
-                res = adminusercontent.createFolder(name=folderName)
-                if 'success' in res:
-                    folderId = res['folder']['id']
-                else:
-                    pass
-
-            folderContent = admin.content.getUserContent(folderId=folderId)
-            if 'folderId' in itemData:
-                itemData['folderId'] = folderId
-
-            itemID = admin.content.getItemID(title=name,itemType=itemType,userContent=folderContent)
-            if not itemID is None:
-                resultApp['Results'] = adminusercontent.updateItem(itemId=itemID,
-                                            updateItemParameters=itemParams,
-                                            folderId=folderId,
+        
+            sea = arcrest.find.search(securityHandler=self._securityHandler)
+            items = sea.findItem(title=name, itemType=itemType,searchorg=False)
+            
+            if items['total'] >= 1:
+                itemId = items['results'][0]['id']  
+                
+            if not itemId is None:
+                item = content.getItem(itemId).userItem
+                results = item.updateItem(itemParameters=itemParams,
                                             text=json.dumps(itemData))
-
+ 
+                if 'error' in results:
+                    return results
             else:
+                try:
+                    item = userInfo.addItem(
+                            itemParameters=itemParams,
+                            overwrite=True,
+                            relationshipType=None,
+                            originItemId=None,
+                            destinationItemId=None,
+                            serviceProxyParams=None,
+                            metadata=None,
+                            text=json.dumps(itemData))
 
-                resultApp['Results']  = adminusercontent.addItem( itemParameters=itemParams,
-                        folder=folderId,
-                        relationshipType=None,
-                        originItemId=None,
-                        destinationItemId=None,
-                        serviceProxyParams=None,
-                        metadata=None,
-                        text=json.dumps(itemData))
-
-
-            if not 'error' in resultApp['Results']:
-
-                group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                shareResults = adminusercontent.shareItems(items=resultApp['Results']['id'],
-                                       groups=','.join(group_ids),
-                                       everyone=everyone,
-                                       org=org)
-                updateParams = arcrest.manageorg.ItemParameter()
-                updateParams.title = name
-                portal = admin.portals()
-                url = url.replace("{AppID}",resultApp['Results']['id'])
-                portalProp = portal.portalProperties
-                url = url.replace("{OrgURL}", portalProp['urlKey'] + '.' + portalProp['customBaseUrl'])
-
-                updateResults = adminusercontent.updateItem(itemId=resultApp['Results']['id'],
-                                                            url=url,
-                                                            updateItemParameters=updateParams,
-                                                            folderId=folderId)
-                resultApp['folderId'] = folderId
-                resultApp['Name'] = name
+                    group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+                    shareResults = userInfo.shareItems(items=item.id,
+                                                       groups=','.join(group_ids),
+                                                       everyone=everyone,
+                                                       org=org)
+                    updateParams = arcrest.manageorg.ItemParameter()
+                    updateParams.title = name
+    
+                    url = url.replace("{AppID}",item.id)
+                    portalself = admin.portals.portalSelf
+                    if portalself.urlKey is None or portalself.customBaseUrl is None:
+                        parsedURL = urlparse(url=self._securityHandler.org_url, scheme='', allow_fragments=True)
+                        url = url.replace("{OrgURL}",parsedURL.netloc + parsedURL.path)
+                    else:
+                        url = url.replace("{OrgURL}", portalself.urlKey + '.' +  portalself.customBaseUrl)
+                    updateParams.url = url                    
+                    updateResults = item.updateItem(itemParameters=updateParams)                    
+                except Exception,e: 
+                    print e                 
+            resultApp['Results']['itemId'] = item.id
+            resultApp['folderId'] = folderId
+            resultApp['Name'] = name
             return resultApp
 
         except arcpy.ExecuteError:
@@ -1488,7 +1829,7 @@ class publishingtools(abstract.baseToolsClass):
             res = None
             folderId = None
             folderContent = None
-            itemID = None
+            itemId = None
             group_ids = None
             shareResults = None
             updateParams = None
@@ -1524,7 +1865,7 @@ class publishingtools(abstract.baseToolsClass):
             del res
             del folderId
             del folderContent
-            del itemID
+            del itemId
             del group_ids
             del shareResults
             del updateParams
@@ -1576,14 +1917,14 @@ class publishingtools(abstract.baseToolsClass):
         folderId = None
         res = None
         folderContent = None
-        itemID = None
+        itemId = None
         group_ids = None
         shareResults = None
         updateParams = None
         resultApp = None
         updateResults = None
         try:
-            resultApp = {'Results':None}
+            resultApp = {'Results':{}}
 
             tags = ''
             description = ''
@@ -1592,10 +1933,20 @@ class publishingtools(abstract.baseToolsClass):
 
             itemJson = config['ItemJSON']
             if os.path.exists(itemJson) == False:
-                print "            Error: %s does not exist" % itemJson
-                return None
+                return {"Results":{"error": "%s does not exist" % itemJson}  }
+
             admin = arcrest.manageorg.Administration(securityHandler=self._securityHandler)
-            adminusercontent = admin.content.usercontent()
+            content = admin.content        
+            userInfo = content.users.user()
+            userCommunity = admin.community
+            folderName = config['Folder']
+            if folderName is not None and folderName != "":               
+                if self.folderExist(name=folderName,folders=userInfo.folders) is None:
+                    res = userInfo.createFolder(name=folderName)
+                    userInfo.refresh()
+                userInfo.currentFolder = folderName 
+            if 'id' in userInfo.currentFolder:
+                folderId = userInfo.currentFolder['id']
 
             layerIDSwitch = []
 
@@ -1610,7 +1961,7 @@ class publishingtools(abstract.baseToolsClass):
                         if replaceItem['ReplaceType'] == 'Global':
                             itemData = common.find_replace(itemData,replaceItem['SearchString'],replaceItem['ReplaceString'])
                         elif replaceItem['ReplaceType'] == 'Map' and 'ItemID' in replaceItem:
-                            item = admin.content.item(itemId=replaceItem['ItemID'])
+                            item = admin.content.getItem(itemId=replaceItem['ItemID'])
                             response = item.itemData()
 
                             layerNamesID = {}
@@ -1621,6 +1972,8 @@ class publishingtools(abstract.baseToolsClass):
 
                             if 'operationalLayers' in response:
                                 for opLayer in response['operationalLayers']:
+                                    #if 'LayerInfo' in replaceItem:
+                                        #for layers in replaceItem['LayerInfo']:                                    
                                     layerNamesID[opLayer['title']] = opLayer['id']
                                     layerIDs.append(opLayer['id'])
                             if 'tables' in response:
@@ -1629,6 +1982,7 @@ class publishingtools(abstract.baseToolsClass):
                                     tableIDs.append(opLayer['id'])
 
                             widgets = itemData['widgets']
+                            dataSourceIDToFields = {}
                             for widget in widgets:
 
                                 if widget.has_key('mapId'):
@@ -1640,11 +1994,56 @@ class publishingtools(abstract.baseToolsClass):
                                                     mapTool['layerIds'] = layerIDs
                                         if widget.has_key('dataSources'):
                                             for dataSource in widget['dataSources']:
+                                                
                                                 if dataSource.has_key('layerId'):
-                                                    if layerNamesID.has_key(dataSource['name']):
+                                                    if 'LayerInfo' in replaceItem:
+                                                        if dataSource['layerId'] in replaceItem['LayerInfo']:
+                                                            layerIDSwitch.append({"OrigID":dataSource['layerId'],
+                                                                                  "NewID":replaceItem['LayerInfo'][dataSource['layerId']]['ID']})
+                                                                                  #'FieldInfo':replaceItem['LayerInfo'][dataSource['layerId']]['FieldInfo']})
+                                                            
+                                                            #dataSourceIDToFields[dataSource['id']] = {'NewID': replaceItem['LayerInfo'][dataSource['layerId']]['ID'],
+                                                                                                      #'FieldInfo': replaceItem['LayerInfo'][dataSource['layerId']]['FieldInfo']}
+                                                            dataSource['layerId'] = replaceItem['LayerInfo'][dataSource['layerId']]['ID']
+                                                    elif layerNamesID.has_key(dataSource['name']):
                                                         layerIDSwitch.append({"OrigID":dataSource['layerId'],"NewID":layerNamesID[dataSource['name']] })
                                                         dataSource['layerId'] = layerNamesID[dataSource['name']]
+                                            for dataSource in widget['dataSources']:
+         
+                                                if dataSource.has_key('filter'):
+                                                    if dataSource['parentDataSourceId'] in dataSourceIDToFields:
+                                                        if 'whereClause' in dataSource['filter']:
+                                                            whercla = str(dataSource['filter']['whereClause'])
+                                                            if pyparsingInstall:
+                                                                try:
+                                                                    selectResults = select_parser.select_stmt.parseString("select * from xyzzy where " + whercla)
+                                                                   
+                                                                    whereElements = list(selectResults['where_expr'])
+                                                                    for h in range(len(whereElements)):
+                                                                        for field in dataSourceIDToFields[dataSource['parentDataSourceId']]['FieldInfo']['fields']:
+                                                                            if whereElements[h] == field['PublishName']:
+                                                                                whereElements[h] = field['ConvertName']
+                                                                                #whercla = whercla.replace(
+                                                                                    #old=field['PublishName'], 
+                                                                                    #new=field['ConvertName'])   
+                                                                    dataSource['filter']['whereClause'] = " ".join(whereElements)
+                                                                except select_parser.ParseException, pe:
+                                                                    for field in dataSourceIDToFields[dataSource['parentDataSourceId']]['FieldInfo']['fields']:
+                                                                        if whercla.contains(field['PublishName']):
+                                                                            whercla = whercla.replace(
+                                                                                old=field['PublishName'], 
+                                                                                new=field['ConvertName'])
 
+                                                                                                                                  
+                                                            else:
+                                                                
+                                                                for field in dataSourceIDToFields[dataSource['parentDataSourceId']]['FieldInfo']['fields']:
+                                                                    if whercla.contains(field['PublishName']):
+                                                                        whercla = whercla.replace(
+                                                                                       old=field['PublishName'], 
+                                                                                       new=field['ConvertName'])
+                                                                    
+                                                                               
 
 
             configFileAsString = json.dumps(itemData)
@@ -1690,53 +2089,44 @@ class publishingtools(abstract.baseToolsClass):
             itemParams.snippet = snippet
             itemParams.typeKeywords = ",".join(typeKeywords)
 
-            adminusercontent = admin.content.usercontent()
-            userCommunity = admin.community
-            userContent = admin.content.getUserContent()
-
-            folderId = admin.content.getFolderID(name=folderName,userContent=userContent)
-            if folderId is None:
-                res = adminusercontent.createFolder(name=folderName)
-                if 'success' in res:
-                    folderId = res['folder']['id']
-                else:
-                    pass
-
-            folderContent = admin.content.getUserContent(folderId=folderId)
-
-            itemID = admin.content.getItemID(title=name,itemType=itemType,userContent=folderContent)
-            if not itemID is None:
-                resultApp['Results'] = adminusercontent.updateItem(itemId=itemID,
-                                            updateItemParameters=itemParams,
-                                            folderId=folderId,
-                                            text=json.dumps(itemData))
-
+            sea = arcrest.find.search(securityHandler=self._securityHandler)
+            items = sea.findItem(title=name, itemType=itemType,searchorg=False)
+        
+            if items['total'] >= 1:
+                itemId = items['results'][0]['id']                    
+            if not itemId is None:
+                item = content.getItem(itemId).userItem
+                results = item.updateItem(itemParameters=itemParams,
+                                                       text=json.dumps(itemData))
+                if 'error' in results:
+                    return results
             else:
+                try:
 
-                resultApp['Results'] = adminusercontent.addItem( itemParameters=itemParams,
-                        folder=folderId,
+                    item = userInfo.addItem(
+                        itemParameters=itemParams,    
                         relationshipType=None,
                         originItemId=None,
                         destinationItemId=None,
                         serviceProxyParams=None,
                         metadata=None,
                         text=json.dumps(itemData))
-
-
-            if not 'error' in resultApp['Results']:
-
-                group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                shareResults = adminusercontent.shareItems(items=resultApp['Results']['id'],
-                                       groups=','.join(group_ids),
-                                       everyone=everyone,
-                                       org=org)
-                updateParams = arcrest.manageorg.ItemParameter()
-                updateParams.title = name
-                updateResults = adminusercontent.updateItem(itemId=resultApp['Results']['id'],
-                                                            updateItemParameters=updateParams,
-                                                            folderId=folderId)
-                resultApp['folderId'] = folderId
-                resultApp['Name'] = name
+                except Exception,e: 
+                    print e                 
+             
+            group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+            shareResults = userInfo.shareItems(items=item.id,
+                                               groups=','.join(group_ids),
+                                               everyone=everyone,
+                                               org=org)
+            updateParams = arcrest.manageorg.ItemParameter()
+            updateParams.title = name
+        
+            updateResults = item.updateItem(itemParameters=updateParams)
+            resultApp['Results']['itemId'] = item.id
+                  
+            resultApp['folderId'] = folderId
+            resultApp['Name'] = name
             return resultApp
         except arcpy.ExecuteError:
             line, filename, synerror = trace()
@@ -1801,7 +2191,7 @@ class publishingtools(abstract.baseToolsClass):
             folderId = None
             res = None
             folderContent = None
-            itemID = None
+            itemId = None
             group_ids = None
             shareResults = None
             updateParams = None
@@ -1850,7 +2240,7 @@ class publishingtools(abstract.baseToolsClass):
             del folderId
             del res
             del folderContent
-            del itemID
+            del itemId
             del group_ids
             del shareResults
             del updateParams
@@ -1867,7 +2257,7 @@ class publishingtools(abstract.baseToolsClass):
         try:
 
             fsRes = []
-            fst = featureservicetools(securityHandler=self._securityHandler)
+            fst = featureservicetools.featureservicetools(securityinfo=self)
 
 
             if isinstance(efs_config, list):
@@ -1879,18 +2269,18 @@ class publishingtools(abstract.baseToolsClass):
                         if str(ext_service['DeleteInfo']['Delete']).upper() == "TRUE":
                             resItm['DeleteDetails'] = fst.DeleteFeaturesFromFeatureLayer(url=fURL, sql=ext_service['DeleteInfo']['DeleteSQL'])
                             if not 'error' in resItm['DeleteDetails'] :
-                                print "            Delete Successful: %s" % fURL
+                                print "Delete Successful: %s" % fURL
                             else:
-                                print "            " + str(resItm['DeleteDetails'])
+                                print  str(resItm['DeleteDetails'])
 
                     resItm['AddDetails'] = fst.AddFeaturesToFeatureLayer(url=fURL, pathToFeatureClass = ext_service['FeatureClass'])
 
                     fsRes.append(resItm)
 
                     if not 'error' in resItm['AddDetails']:
-                        print "            Add Successful: %s " % fURL
+                        print "Add Successful: %s " % fURL
                     else:
-                        print "            " + str(resItm['AddDetails'])
+                        print str(resItm['AddDetails'])
 
             else:
                 resItm={"DeleteDetails": None,"AddDetails":None}
@@ -1924,6 +2314,8 @@ class publishingtools(abstract.baseToolsClass):
                         "arcpyError": arcpy.GetMessages(2),
                                         }
                                         )
+        except common.ArcRestHelperError,e:
+            raise e
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -1942,4 +2334,271 @@ class publishingtools(abstract.baseToolsClass):
             del fURL
             del resItm
 
+            gc.collect()
+    #----------------------------------------------------------------------
+    def _publishFeatureCollection(self, config):
+        try:
+  
+            # Service settings
+            zipfile = config['Zip']  
+            service_name = config['Title']
+            if config.has_key('DateTimeFormat'):
+                loc_df = config['DateTimeFormat']
+            else:
+                loc_df = dateTimeFormat
+                
+            description = ""
+            if 'Description' in config:
+                description = config['Description']                    
+            
+            tags = config['Tags']
+            snippet = config['Summary']
+            extent = config['Extent']
+    
+            everyone = config['ShareEveryone']
+            org = config['ShareOrg']
+            groupNames = config['Groups']  #Groups are by ID. Multiple groups comma separated
+    
+            folderName = config['Folder']
+            thumbnail = config['Thumbnail']
+    
+            typeKeywords = config['typeKeywords']                
+                
+            datestring = datetime.datetime.now().strftime(loc_df)
+            service_name = service_name.replace('{DATE}',datestring)
+            service_name = service_name.replace('{Date}',datestring)
+  
+            service_name_safe = service_name.replace(' ','_')
+            service_name_safe = service_name_safe.replace(':','_')
+            service_name_safe = service_name_safe.replace('-','_')         
+  
+            if os.path.exists(path=zipfile) == False:
+                raise ValueError("Zip does not exit")
+  
+            admin = arcrest.manageorg.Administration(securityHandler=self.securityhandler)
+            content = admin.content
+            feature_content = content.FeatureContent
+
+            publishParameters = arcrest.manageorg.GenerateParameter(
+                name=service_name,maxRecordCount=4000
+                )
+            
+                   
+            fcResults = feature_content.generate(publishParameters=publishParameters,
+                itemId=None,
+                filePath=zipfile,
+                fileType='shapefile')
+            
+            if not 'featureCollection' in fcResults:
+                raise common.ArcRestHelperError({
+                    "function": "_publishFeatureCollection",
+                    "line": lineno(),
+                    "filename":  'publishingtools.py',
+                    "synerror": fcResults
+                })
+            if not 'layers' in fcResults['featureCollection']:
+                raise common.ArcRestHelperError({
+                    "function": "_publishFeatureCollection",
+                    "line": lineno(),
+                    "filename":  'publishingtools.py',
+                    "synerror": fcResults
+                })
+            
+            fcJson = {'visibility':True,
+                      'showLegend':True,
+                      'opacity':1}
+            for layer in fcResults['featureCollection']['layers']:
+                oidFldName = ''
+                highOID = -1
+                popInfo = {'title':'',
+                           'description':None,
+                           'showAttachments': False,
+                           'mediaInfo': [],
+                           'fieldInfos': []
+                           }
+                if 'layerDefinition' in layer:
+                    extVal = extent.split(',')
+                    layer['layerDefinition']['extent'] = {'type':'extent',
+                                       'xmin':extVal[0],
+                                       'ymin':extVal[1],
+                                       'xmax':extVal[2],
+                                       'ymax':extVal[3]
+                                       }
+                    layer['layerDefinition']['spatialReference'] = {'wkid':102100}
+                    
+                    if 'fields' in layer['layerDefinition']:
+                        for field in layer['layerDefinition']['fields']:
+                            fieldInfos = None
+                            if field['type'] == 'esriFieldTypeOID':
+                                oidFldName = field['name']
+                                fieldInfos = {
+                                    'fieldName':field['name'],
+                                    'label':field['alias'],
+                                    'isEditable':False,
+                                    'tooltip':'',
+                                    'visible':False,
+                                    'format':None,
+                                    'stringFieldOption':'textbox'
+                                }
+                                              
+                            elif field['type'] == 'esriFieldTypeInteger':
+                                fieldInfos = {
+                                    'fieldName':field['name'],
+                                    'label':field['alias'],
+                                    'isEditable':True,
+                                    'tooltip':'',
+                                    'visible':True,
+                                    'format':{
+                                        'places':0,
+                                        'digitSeparator':True
+                                    },
+                                    'stringFieldOption':'textbox'
+                                }    
+                            elif field['type'] == 'esriFieldTypeDouble':
+                                fieldInfos = {
+                                    'fieldName':field['name'],
+                                    'label':field['alias'],
+                                    'isEditable':True,
+                                    'tooltip':'',
+                                    'visible':True,
+                                    'format':{
+                                        'places':2,
+                                        'digitSeparator':True
+                                        },
+                                    'stringFieldOption':'textbox'
+                                }                                            
+                            elif field['type'] == 'esriFieldTypeString':
+                                fieldInfos = {
+                                    'fieldName':field['name'],
+                                    'label':field['alias'],
+                                    'isEditable':True,
+                                    'tooltip':'',
+                                    'visible':True,
+                                    'format':None,
+                                    'stringFieldOption':'textbox'
+                                }                                      
+                            else:
+                                fieldInfos = {
+                                    'fieldName':field['name'],
+                                    'label':field['alias'],
+                                    'isEditable':True,
+                                    'tooltip':'',
+                                    'visible':True,
+                                    'format':None,
+                                    'stringFieldOption':'textbox'
+                                }                                                                      
+                            if fieldInfos is not None:
+                                popInfo['fieldInfos'].append(fieldInfos)
+                                
+                if 'featureSet' in layer:
+                    if 'features' in layer['featureSet']:
+                        for feature in layer['featureSet']['features']:
+                            if 'attributes' in feature:
+                                if feature['attributes'][oidFldName] > highOID:
+                                    highOID = feature[oidFldName]
+                layer['nextObjectId'] = highOID + 1
+                
+            fcJson['layers'] = fcResults['featureCollection']['layers']
+            itemParams = arcrest.manageorg.ItemParameter()
+            itemParams.type = "Feature Collection"
+            itemParams.title = service_name
+            itemParams.thumbnail = thumbnail            
+            itemParams.overwrite = True
+            itemParams.snippet = snippet
+            itemParams.description = description
+            itemParams.extent = extent
+            itemParams.tags = tags
+            itemParams.typeKeywords = ",".join(typeKeywords)
+            
+            userInfo = content.users.user()
+            userCommunity = admin.community
+            
+  
+            if folderName is not None and folderName != "":               
+                if self.folderExist(name=folderName,folders=userInfo.folders) is None:
+                    res = userInfo.createFolder(name=folderName)
+                userInfo.currentFolder = folderName
+            if 'id' in userInfo.currentFolder:
+                folderId = userInfo.currentFolder['id']
+            
+            sea = arcrest.find.search(securityHandler=self._securityHandler)
+            items = sea.findItem(title=service_name, itemType='Feature Collection',searchorg=False)
+            itemId = None
+            if items['total'] >= 1:
+                itemId = items['results'][0]['id']            
+            if not itemId is None:
+                item = content.getItem(itemId).userItem
+                resultSD = item.updateItem(itemParameters=itemParams,
+                                           text=fcJson)
+  
+            else:
+  
+                resultSD = userInfo.addItem(itemParameters=itemParams,
+                                            overwrite=True,
+                                            url=None,
+                                            text= fcJson,
+                                            relationshipType=None,
+                                            originItemId=None,
+                                            destinationItemId=None,
+                                            serviceProxyParams=None,
+                                            metadata=None)
+  
+  
+  
+            if 'error' in resultSD:
+                if not itemId is None:
+                    print "Attempting to delete"
+                    delres=userInfo.deleteItems(items=itemId)
+                    if 'error' in delres:
+                        print delres
+                        return delres
+                    print "Delete successful"                                
+                else:
+                    print "Item exist and cannot be found, probably owned by another user."
+                    raise common.ArcRestHelperError({
+                        "function": "_publishFeatureCollection",
+                        "line": lineno(),
+                        "filename":  'publishingtools.py',
+                        "synerror": "Item exist and cannot be found, probably owned by another user."
+                    })       
+  
+                resultSD = userInfo.addItem(itemParameters=itemParams,
+                                            overwrite=True,
+                                            url=None,
+                                            text=fcResults['featureCollection'],
+                                            relationshipType=None,
+                                            originItemId=None,
+                                            destinationItemId=None,
+                                            serviceProxyParams=None,
+                                            metadata=None)       
+                return resultSD
+            else:
+                return resultSD
+  
+  
+  
+        except arcpy.ExecuteError:
+            line, filename, synerror = trace()
+            raise common.ArcRestHelperError({
+                "function": "_publishFeatureCollection",
+                "line": line,
+                "filename":  filename,
+                "synerror": synerror,
+                "arcpyError": arcpy.GetMessages(2),
+            })
+        except common.ArcRestHelperError, e:
+            raise e
+           
+        except:
+            line, filename, synerror = trace()
+            raise common.ArcRestHelperError({
+                "function": "_publishFeatureCollection",
+                "line": line,
+                "filename":  filename,
+                "synerror": synerror,
+            })
+  
+        finally:
+  
+           
             gc.collect()

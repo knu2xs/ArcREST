@@ -34,12 +34,12 @@ class Uploads(BaseAGSServer):
         the server.
         """
         params = {
-            "f" :"json",
-            "token" : self._securityHandler.token
+            "f" :"json"
         }
         return self._do_get(url=self._url,
                             param_dict=params,
                             header={},
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
 
@@ -52,10 +52,10 @@ class Uploads(BaseAGSServer):
         """
         url = self._url + "/%s/delete" % itemId
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -75,10 +75,10 @@ class Uploads(BaseAGSServer):
         """
         url = self._url + "/%s" % itemId
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_get(url=url, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -87,8 +87,7 @@ class Uploads(BaseAGSServer):
         import urlparse
         url = self._url + "/upload"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         files = []
         files.append(('itemFile', filePath, os.path.basename(filePath)))
@@ -98,7 +97,7 @@ class Uploads(BaseAGSServer):
                                        files = files,
                                        fields=params,
                                        port=parsed.port,
+                                       securityHandler=self._securityHandler,
                                        ssl=parsed.scheme.lower() == 'https',
                                        proxy_port=self._proxy_port,
                                        proxy_url=self._proxy_url)
-

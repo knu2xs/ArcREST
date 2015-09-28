@@ -37,10 +37,10 @@ class Security(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._url, param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -51,7 +51,7 @@ class Security(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in manageags.security."
             del k
             del v
     #----------------------------------------------------------------------
@@ -78,12 +78,12 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "name" : name,
             "description" : description
         }
         aURL = self._url + "/roles/add"
         return self._do_post(url=aURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -101,7 +101,6 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "username" : username,
             "password" : password,
         }
@@ -113,6 +112,7 @@ class Security(BaseAGSServer):
             params['email'] = email
         aURL = self._url + "/users/add"
         return self._do_post(url=aURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -120,12 +120,12 @@ class Security(BaseAGSServer):
         """ Assigns a role to multiple users """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "rolename" : rolename,
             "users" : users
         }
         rURL = self._url + "/roles/addUsersToRole"
         return self._do_post(url=rURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -158,12 +158,12 @@ class Security(BaseAGSServer):
         aURL = self._url + "/roles/assignPrivilege"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "rolename" : rolename,
             "privilege" : privilege
         }
         return self._do_post(url=aURL,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -183,12 +183,12 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "username" : username,
             "roles" : roles
         }
         uURL = self._url + "/users/assignRoles"
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -201,10 +201,10 @@ class Security(BaseAGSServer):
         """
         dURL = self._url + "/psa/disable"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=dURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -217,16 +217,16 @@ class Security(BaseAGSServer):
            system and accidentally disabled the primary site administrator
            account, you can re-enable the account by running the password
            reset utility. This utility is shipped in <ArcGIS Server
-           installation directory>\Server\tools\passwordreset. Use the -e
+           installation directory>//Server//tools//passwordreset. Use the -e
            option to re-enable the primary site administrator. This utility
            is described in more detail in the ArcGIS Server Help.
         """
         eURL = self._url + "/psa/enable"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=eURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -240,12 +240,12 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "rolename" : rolename
         }
         pURL = self._url + "/roles/getPrivilege"
         return self._do_post(url=pURL,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -259,11 +259,11 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "username" : username
         }
         url = self._url + "/users/getPrivilege"
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -284,11 +284,11 @@ class Security(BaseAGSServer):
         uURL = self._url + "/roles/getRoles"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "startIndex" : startIndex,
             "pageSize" : pageSize
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -303,10 +303,10 @@ class Security(BaseAGSServer):
         uURL = self._url + "/roles/getRolesByPrivilege"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "privilege" : privilege
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -322,7 +322,6 @@ class Security(BaseAGSServer):
         uURL = self._url + "/roles/getRolesForUser"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "username" : username
         }
         if filter is not None:
@@ -331,6 +330,7 @@ class Security(BaseAGSServer):
         if maxCount is not None:
             params['maxCount'] = maxCount
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -352,12 +352,12 @@ class Security(BaseAGSServer):
         uURL = self._url + "/users/getUsers"
         params={
             "f" : "json",
-            "token" : self._securityHandler.token,
             "startIndex" : startIndex,
             "pageSize" : pageSize
         }
         return self._do_post(url=uURL,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -375,7 +375,6 @@ class Security(BaseAGSServer):
         uURL = self._url + "/roles/getUsersWithinRole"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "rolename" : rolename,
             "maxCount" : maxCount
         }
@@ -383,6 +382,7 @@ class Security(BaseAGSServer):
            isinstance(filter, str):
             params['filter'] = filter
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -390,11 +390,11 @@ class Security(BaseAGSServer):
     def primarySiteAdministrator(self):
         """ returns if the primary site admin has been disabled """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/psa"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -410,12 +410,12 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "rolename" : rolename
         }
         uURL = self._url + "/roles/remove"
         return self._do_post(url=uURL,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -433,11 +433,11 @@ class Security(BaseAGSServer):
         uURL = self._url + "/users/removeRoles"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "username" : username,
             "roles" : roles
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -451,11 +451,11 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : 'json',
-            "token" : self._securityHandler.token,
             "username" : username
         }
         uURL = self._url + "/users/remove"
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -470,12 +470,12 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : 'json',
-            "token" : self._securityHandler.token,
             "rolename" : rolename,
             "users" : users
         }
         uURL = self._url + "/roles/removeUsersFromRole"
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -485,11 +485,11 @@ class Security(BaseAGSServer):
            returns the number of roles for AGS
         """
         params = {
-        "f" : "json",
-        "token" : self._securityHandler.token
+        "f" : "json"
         }
         uURL = self._url + "/roles"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -506,12 +506,12 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "filter" : filter,
             "maxCount" : maxCount
         }
         uURL = self._url + "/roles/search"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -528,11 +528,11 @@ class Security(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "filter" : filter,
             "maxCount" : maxCount
         }
         uURL = self._url + "/users/search"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)

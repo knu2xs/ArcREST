@@ -32,10 +32,10 @@ class Log(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._url, param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -46,7 +46,7 @@ class Log(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in Logs."
             del k
             del v
     #----------------------------------------------------------------------
@@ -81,11 +81,11 @@ class Log(BaseAGSServer):
         """
         params = {
             "f": "json",
-            "token" : self._securityHandler.token,
             "machine" : machine
         }
         return self._do_post(url=self._url + "/countErrorReports",
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -93,10 +93,10 @@ class Log(BaseAGSServer):
         """ Deletes all the log files on all server machines in the site.  """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token
         }
         return self._do_post(url=self._url + "/clean",
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -104,11 +104,11 @@ class Log(BaseAGSServer):
     def logSettings(self):
         """ returns the current log settings """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         sURL = self._url + "/settings"
         return self._do_get(url=sURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)['settings']
     #----------------------------------------------------------------------
@@ -132,7 +132,6 @@ class Log(BaseAGSServer):
         allowed_levels =  ("OFF", "SEVERE", "WARNING", "INFO", "FINE", "VERBOSE", "DEBUG")
         currentSettings= self.logSettings
         currentSettings["f"] ="json"
-        currentSettings["token"] = self._securityHandler.token
 
         if logLevel.upper() in allowed_levels:
             currentSettings['logLevel'] = logLevel.upper()
@@ -146,6 +145,7 @@ class Log(BaseAGSServer):
            maxErrorReportsCount > 0:
             currentSettings['maxErrorReportsCount'] = maxErrorReportsCount
         return self._do_post(url=lURL, param_dict=currentSettings,
+                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -182,7 +182,6 @@ class Log(BaseAGSServer):
             qFilter['codes'] = codes
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "sinceServerStart" : sinceServerStart,
             "pageSize" : 10000
         }
@@ -204,8 +203,9 @@ class Log(BaseAGSServer):
         if export == True and \
            out_path is not None:
             messages = self._do_post(self._url + "/query", params,
-                            proxy_url=self._proxy_url,
-                            proxy_port=self._proxy_port)
+                                     securityHandler=self._securityHandler,
+                                     proxy_url=self._proxy_url,
+                                     proxy_port=self._proxy_port)
 
             with open(name=out_path, mode='wb') as f:
                 hasKeys = False
@@ -223,5 +223,6 @@ class Log(BaseAGSServer):
             return out_path
         else:
             return self._do_post(self._url + "/query", params,
-                            proxy_url=self._proxy_url,
-                            proxy_port=self._proxy_port)
+                                 securityHandler=self._securityHandler,
+                                 proxy_url=self._proxy_url,
+                                 proxy_port=self._proxy_port)

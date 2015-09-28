@@ -1,6 +1,8 @@
 from .._abstract.abstract import BaseAGSServer
 from parameters import Extension
+import os
 import json
+import tempfile
 ########################################################################
 class Services(BaseAGSServer):
     """ returns information about the services on AGS """
@@ -40,11 +42,11 @@ class Services(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._currentURL,
                                  param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -55,7 +57,7 @@ class Services(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented manageags.services."
             del k
             del v
     #----------------------------------------------------------------------
@@ -134,11 +136,11 @@ class Services(BaseAGSServer):
         """ returns the services in the current folder """
         self._services = []
         params = {
-                    "f" : "json",
-                    "token" : self._securityHandler.token
+                    "f" : "json"
                 }
         json_dict = self._do_get(url=self._currentURL,
                                  param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         if "services" in json_dict.keys():
@@ -174,8 +176,7 @@ class Services(BaseAGSServer):
             if v.upper() not in allowed_service_types:
                 return {"message" : "%s is not an allowed service type." % v}
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         type_services = []
         folders = self.folders
@@ -187,6 +188,7 @@ class Services(BaseAGSServer):
             else:
                 url = baseURL + "/%s" % folder
             res = self._do_get(url, params,
+                               securityHandler=self._securityHandler,
                                proxy_url=self._proxy_url,
                                proxy_port=self._proxy_port)
             if res.has_key("services"):
@@ -221,11 +223,11 @@ class Services(BaseAGSServer):
             uURL = self._url + "/permissions/add"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "principal" : principal,
             "isAllowed" : isAllowed
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -241,10 +243,10 @@ class Services(BaseAGSServer):
         uURL = self._url + "/permissions/clean"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "principal" : principal
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -259,12 +261,12 @@ class Services(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "folderName" : folderName,
             "description" : description
         }
         uURL = self._url + "/createFolder"
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -277,14 +279,14 @@ class Services(BaseAGSServer):
               JSON message as dictionary
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token,
+            "f" : "json"
         }
         if folderName in self.folders:
             uURL = self._url + "/%s/delete" % folderName
             return self._do_post(url=uURL, param_dict=params,
-                             proxy_url=self._proxy_url,
-                             proxy_port=self._proxy_port)
+                                 securityHandler=self._securityHandler,
+                                 proxy_url=self._proxy_url,
+                                 proxy_port=self._proxy_port)
         else:
             return {"error" : "folder does not exist"}
     #----------------------------------------------------------------------
@@ -307,10 +309,10 @@ class Services(BaseAGSServer):
                                                      serviceName,
                                                      serviceType)
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     def service_report(self, folder=None):
@@ -328,10 +330,10 @@ class Services(BaseAGSServer):
             uURL = self._url + "/%s/report" % folder
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "parameters" : items
         }
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -339,14 +341,14 @@ class Services(BaseAGSServer):
     def types(self):
         """ returns the allowed services types """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/types"
         return self._do_get(url=uURL,
                             param_dict=params,
-                             proxy_url=self._proxy_url,
-                             proxy_port=self._proxy_port)
+                            securityHandler=self._securityHandler,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     def rename_service(self, serviceName, serviceType,
                        serviceNewName, folder=None):
@@ -363,7 +365,6 @@ class Services(BaseAGSServer):
         """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "serviceName" : serviceName,
             "serviceType" : serviceType,
             "serviceNewName" : serviceNewName
@@ -373,6 +374,7 @@ class Services(BaseAGSServer):
         else:
             uURL = self._url + "/%s/renameService" % folder
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -383,8 +385,7 @@ class Services(BaseAGSServer):
         """
         url = self._url + "/createService"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         if isinstance(service, str):
             params['service'] = service
@@ -392,6 +393,7 @@ class Services(BaseAGSServer):
             params['service'] = json.dumps(service)
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -418,20 +420,13 @@ class Services(BaseAGSServer):
         url = self._url + "/stopServices"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "service" : json.dumps(services)
         }
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
-    ##----------------------------------------------------------------------
-    #@property
-    #def extensions(self):
-        #"""
-
-        #"""
-        #return self._extentions
 
 ########################################################################
 class AGSService(BaseAGSServer):
@@ -465,6 +460,7 @@ class AGSService(BaseAGSServer):
     _keepAliveInterval = None
     _maxInstancesPerNode = None
     _json = None
+    _json_dict = None
     _interceptor = None
     _provider = None
     _portalProperties = None
@@ -495,14 +491,15 @@ class AGSService(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._currentURL,
                                  param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
+        self._json_dict = json_dict
         attributes = [attr for attr in dir(self)
                     if not attr.startswith('__') and \
                     not attr.startswith('_')]
@@ -515,14 +512,13 @@ class AGSService(BaseAGSServer):
             elif k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in manageags.AGSService."
             del k
             del v
     #----------------------------------------------------------------------
     def refreshProperties(self):
         """refreshes the object's values by re-querying the service"""
         self.__init()
-
     #----------------------------------------------------------------------
     def __str__(self):
         """returns a string of the object"""
@@ -557,11 +553,17 @@ class AGSService(BaseAGSServer):
                    "properties": self._properties,
                    "extensions": [e.value for e in self.extensions],
                    "datasets": self._datasets,
-
                    }
             if self._jsonProperties is not None:
                 val["jsonProperties"] = self._jsonProperties
         return json.dumps(val)
+    #----------------------------------------------------------------------
+    def __iter__(self):
+        """class iterator which yields a key/value pair"""
+        if self._json_dict is None:
+            self.__init()
+        for k,v in self._json_dict.iteritems():
+            yield (k,v)
     #----------------------------------------------------------------------
     def jsonProperties(self):
         """returns the jsonProperties"""
@@ -590,21 +592,25 @@ class AGSService(BaseAGSServer):
         if self._provider is None:
             self.__init()
         return self._provider
+    #----------------------------------------------------------------------
     @property
     def recycleInterval(self):
         if self._recycleInterval is None:
             self.__init()
         return self._recycleInterval
+    #----------------------------------------------------------------------
     @property
     def instancesPerContainer(self):
         if self._instancesPerContainer is None:
             self.__init()
         return self._instancesPerContainer
+    #----------------------------------------------------------------------
     @property
     def maxWaitTime(self):
         if self._maxWaitTime is None:
             self.__init()
         return self._maxWaitTime
+    #----------------------------------------------------------------------
     @property
     def extensions(self):
         if self._extensions is None:
@@ -630,101 +636,121 @@ class AGSService(BaseAGSServer):
         if self._minInstancesPerNode is None:
             self.__init()
         return self._minInstancesPerNode
+    #----------------------------------------------------------------------
     @property
     def maxIdleTime(self):
         if self._maxIdleTime is None:
             self.__init()
         return self._maxIdleTime
+    #----------------------------------------------------------------------
     @property
     def maxUsageTime(self):
         if self._maxUsageTime is None:
             self.__init()
         return self._maxUsageTime
+    #----------------------------------------------------------------------
     @property
     def allowedUploadFileTypes(self):
         if self._allowedUploadFileTypes is None:
             self.__init()
         return self._allowedUploadFileTypes
+    #----------------------------------------------------------------------
     @property
     def datasets(self):
         if self._datasets is None:
             self.__init()
         return self._datasets
+    #----------------------------------------------------------------------
     @property
     def properties(self):
         if self._properties is None:
             self.__init()
         return self._properties
+    #----------------------------------------------------------------------
     @property
     def recycleStartTime(self):
         if self._recycleStartTime is None:
             self.__init()
         return self._recycleStartTime
+    #----------------------------------------------------------------------
     @property
     def clusterName(self):
         if self._clusterName is None:
             self.__init()
         return self._clusterName
+    #----------------------------------------------------------------------
     @property
     def description(self):
         if self._description is None:
             self.__init()
         return self._description
+    #----------------------------------------------------------------------
     @property
     def isDefault(self):
         if self._isDefault is None:
             self.__init()
         return self._isDefault
+    #----------------------------------------------------------------------
     @property
     def type(self):
         if self._type is None:
             self.__init()
         return self._type
+    #----------------------------------------------------------------------
     @property
     def maxUploadFileSize(self):
         if self._maxUploadFileSize is None:
             self.__init()
         return self._maxUploadFileSize
+    #----------------------------------------------------------------------
     @property
     def keepAliveInterval(self):
         if self._keepAliveInterval is None:
             self.__init()
         return self._keepAliveInterval
+    #----------------------------------------------------------------------
     @property
     def maxInstancesPerNode(self):
         if self._maxInstancesPerNode is None:
             self.__init()
         return self._maxInstancesPerNode
+    #----------------------------------------------------------------------
     @property
     def private(self):
         if self._private is None:
             self.__init()
         return self._private
+    #----------------------------------------------------------------------
     @property
     def maxStartupTime(self):
         if self._maxStartupTime is None:
             self.__init()
         return self._maxStartupTime
+    #----------------------------------------------------------------------
     @property
     def loadBalancing(self):
         if self._loadBalancing is None:
             self.__init()
         return self._loadBalancing
+    #----------------------------------------------------------------------
     @property
     def configuredState(self):
         if self._configuredState is None:
             self.__init()
         return self._configuredState
+    #----------------------------------------------------------------------
     @property
     def capabilities(self):
         if self._capabilities is None:
             self.__init()
         return self._capabilities
+    #----------------------------------------------------------------------
     @property
     def isolationLevel(self):
         if self._isolationLevel is None:
             self.__init()
         return self._isolationLevel
+    #----------------------------------------------------------------------
     @property
     def serviceName(self):
         if self._serviceName is None:
@@ -734,22 +760,22 @@ class AGSService(BaseAGSServer):
     def start_service(self):
         """ starts the specific service """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/start"
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     def stop_service(self):
         """ stops the current service """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/stop"
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -758,50 +784,140 @@ class AGSService(BaseAGSServer):
         self.stop_service()
         self.start_service()
         return {'status': 'success'}
+    #----------------------------------------------------------------------
+    def delete_service(self):
+        """deletes a service from arcgis server"""
+        params = {
+            "f" : "json",
+        }
+        uURL = self._url + "/delete"
+        return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
     @property
     def status(self):
         """ returns the status of the service """
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token
         }
         uURL = self._url + "/status"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
     @property
     def statistics(self):
         """ returns the stats for the service """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/statistics"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
     @property
     def permissions(self):
         """ returns the permissions for the service """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/permissions"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
     @property
     def iteminfo(self):
         """ returns the item information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         uURL = self._url + "/iteminfo"
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def itemInfoUpload(self, folder, filePath):
+        """
+        Allows for the upload of new itemInfo files such as metadata.xml
+        Inputs:
+           folder - folder on ArcGIS Server
+           filePath - full path of the file to upload
+        Output:
+           json as dictionary
+        """
+        files = []
+        url = self._url + "/iteminfo/upload"
+        import urlparse
+        params = {
+            "f" : "json",
+            "folder" : folder
+        }
+        files.append(('file', filePath, os.path.basename(filePath)))
+        parsed = urlparse.urlparse(url)
+        return self._post_multipart(host=parsed.hostname,
+                                    port=parsed.port,
+                                    selector=parsed.path,
+                                    fields=params,
+                                    files=files,
+                                    securityHandler=self._securityHandler,
+                                    ssl=parsed.scheme.lower() == 'https',
+                                    proxy_url=self._proxy_url,
+                                    proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def editItemInfo(self, json_dict):
+        """
+        Allows for the direct edit of the service's item's information.
+        To get the current item information, pull the data by calling
+        iteminfo property.  This will return the default template then pass
+        this object back into the editItemInfo() as a dictionary.
+
+        Inputs:
+           json_dict - iteminfo dictionary.
+        Output:
+           json as dictionary
+        """
+        url = self._url + "/iteminfo/edit"
+        params = {
+            "f" : "json",
+            "serviceItemInfo" : json.dumps(json_dict)
+        }
+        return self._do_post(url=url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def serviceManifest(self, fileType="json"):
+        """
+        The service manifest resource documents the data and other
+        resources that define the service origins and power the service.
+        This resource will tell you underlying databases and their location
+        along with other supplementary files that make up the service.
+
+        Inputs:
+           fileType - this can be json or xml.  json return the
+            manifest.json file.  xml returns the manifest.xml file.
+
+
+        """
+
+        url = self._url + "/iteminfo/manifest/manifest.%s" % fileType
+        params = {
+        }
+        f = self._download_file(url=url, save_path=tempfile.gettempdir(),
+                            file_name=os.path.basename(url), param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
+        return open(f, 'r').read()
     #----------------------------------------------------------------------
     def addPermission(self, principal, isAllowed=True):
         """
@@ -817,11 +933,11 @@ class AGSService(BaseAGSServer):
         uURL = self._url + "/permissions/add"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "principal" : principal,
             "isAllowed" : isAllowed
         }
         return self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -834,17 +950,13 @@ class AGSService(BaseAGSServer):
         """
         url = self._url + "/edit"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token,
-
+            "f" : "json"
         }
         if isinstance(service, str):
             params['service'] = service
         elif isinstance(service, dict):
             params['service'] = json.dumps(service)
-
         return self._do_post(url=url, param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
-
-

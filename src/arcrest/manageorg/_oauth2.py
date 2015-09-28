@@ -2,7 +2,7 @@ from ..security.security import OAuthSecurityHandler, AGOLTokenSecurityHandler
 from .._abstract.abstract import BaseAGOLClass
 import os
 import urlparse
-import parameters
+import _parameters as parameters
 
 ########################################################################
 class oauth2(BaseAGOLClass):
@@ -24,7 +24,7 @@ class oauth2(BaseAGOLClass):
         self._proxy_port = proxy_port
         self._securityHandler = securityHandler
         if not securityHandler is None:
-            self._referer_url = securityHandler.referer_url  
+            self._referer_url = securityHandler.referer_url
         self._proxy_url = proxy_url
     #----------------------------------------------------------------------
     def root(self):
@@ -70,7 +70,6 @@ class oauth2(BaseAGOLClass):
         url = self._url + "/registerApp"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "itemId" : itemId,
             "appType" : appType
         }
@@ -78,6 +77,7 @@ class oauth2(BaseAGOLClass):
             params['redirect_uris'] = redirect_uris
         return self._do_post(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -91,19 +91,11 @@ class oauth2(BaseAGOLClass):
         """
         url = self._url + "/app/%s" % clientId
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_get(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
-
-
-
-
-
-
-
-
 

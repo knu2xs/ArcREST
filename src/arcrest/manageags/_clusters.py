@@ -39,11 +39,11 @@ class Clusters(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._url,
                                  param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -54,7 +54,7 @@ class Clusters(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in Clusters."
             del k
             del v
     #----------------------------------------------------------------------
@@ -85,7 +85,6 @@ class Clusters(BaseAGSServer):
         """
         url = self._url + "/create"
         params = {
-            "token" : self._securityHandler.token,
             "f" : "json",
             "clusterName" : clusterName,
             "machineNames" : machineNames,
@@ -93,6 +92,7 @@ class Clusters(BaseAGSServer):
         }
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -105,11 +105,11 @@ class Clusters(BaseAGSServer):
         """
         url = self._url + "/getAvailableMachines"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_get(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
 ########################################################################
@@ -157,6 +157,7 @@ class Cluster(BaseAGSServer):
         }
         json_dict = self._do_get(url=self._url,
                                  param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -167,7 +168,7 @@ class Cluster(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in Clusters."
             del k
             del v
     #----------------------------------------------------------------------
@@ -234,12 +235,12 @@ class Cluster(BaseAGSServer):
         operation reports an error.
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         url = self._url + "/start"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -251,12 +252,12 @@ class Cluster(BaseAGSServer):
         be reached, then this operation reports an error.
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         url = self._url + "/stop"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -268,12 +269,12 @@ class Cluster(BaseAGSServer):
         also stopped. Deleting a cluster does not delete your GIS services.
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         url = self._url + "/delete"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -286,12 +287,12 @@ class Cluster(BaseAGSServer):
         This resource was added at ArcGIS 10.1 Service Pack 1.
         """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         url = self._url + "/services"
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -306,11 +307,11 @@ class Cluster(BaseAGSServer):
         """
         url = self._url + "/machines"
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         return self._do_get(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -328,11 +329,11 @@ class Cluster(BaseAGSServer):
         url = self._url + "/machines/add"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "machineNames" : machineNames
         }
         return self._do_post(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -349,11 +350,11 @@ class Cluster(BaseAGSServer):
         url = self._url + "/machines/remove"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "machineNames" : machineNames
         }
         return self._do_post(url=url,
                             param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
@@ -368,11 +369,10 @@ class Cluster(BaseAGSServer):
         url = self._url + "/editProtocol"
         params = {
             "f" : "json",
-            "token" : self._securityHandler.token,
             "clusterProtocol" : str(clusterProtocolObj)
         }
         return self._do_post(url=url,
                              param_dict=params,
+                             securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
-

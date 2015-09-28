@@ -13,7 +13,6 @@ from .._abstract.abstract import BaseAGOLClass, BaseSecurityHandler
 import urlparse
 import urllib
 import os
-import json
 import types
 from ..security import security
 from ..common.general import _date_handler
@@ -65,8 +64,7 @@ class TiledService(BaseAGOLClass):
         if isinstance(securityHandler, BaseSecurityHandler):
             self._securityHandler = securityHandler
         if not securityHandler is None:
-            self._referer_url = securityHandler.referer_url  
-            self._token = securityHandler.token
+            self._referer_url = securityHandler.referer_url
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
         if initialize:
@@ -74,13 +72,10 @@ class TiledService(BaseAGOLClass):
     #----------------------------------------------------------------------
     def __init(self):
         """ loads the data into the class """
-        if self._token is None:
-            param_dict = {"f": "json"}
-        else:
-            param_dict = {"f": "json",
-                          "token" : self._token
-                          }
-        json_dict = self._do_get(self._url, param_dict, proxy_url=self._proxy_url, proxy_port=self._proxy_port)
+        params = {"f": "json"}
+        json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
+                                 proxy_url=self._proxy_url, proxy_port=self._proxy_port)
         attributes = [attr for attr in dir(self)
                     if not attr.startswith('__') and \
                     not attr.startswith('_')]
@@ -88,7 +83,7 @@ class TiledService(BaseAGOLClass):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented in tiled service."
+                print k, " - attribute not implemented in tiled service."
     #----------------------------------------------------------------------
     @property
     def maxExportTilesCount(self):
@@ -115,9 +110,7 @@ class TiledService(BaseAGOLClass):
         if isinstance(value, BaseSecurityHandler):
             if isinstance(value, security.AGOLTokenSecurityHandler):
                 self._securityHandler = value
-                self._token = value.token
             elif isinstance(value, security.OAuthSecurityHandler):
-                self._token = value.token
                 self._securityHandler = value
             else:
                 pass

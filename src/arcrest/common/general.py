@@ -1,14 +1,13 @@
 import datetime
 import time
 import json
-
+from .. import arcpyFound
+if arcpyFound:
+    import arcpy
 import copy
 import os
 import tempfile
 import uuid
-from .. import arcpyFound
-if arcpyFound:
-    import arcpy
 from spatial import json_to_featureclass
 from geometry import Point, MultiPoint, Polygon, Polyline, SpatialReference
 from .._abstract.abstract import AbstractGeometry
@@ -61,7 +60,16 @@ def online_time_to_string(value,timeFormat):
           string
     """
     return datetime.datetime.fromtimestamp(value /1000).strftime(timeFormat)
-
+#----------------------------------------------------------------------
+def timestamp_to_datetime(timestamp):
+    """
+       Converts a timestamp to a datetime object
+       Inputs:
+          timestamp - timestamp value as Long
+       output:
+          datetime object
+    """
+    return datetime.datetime.fromtimestamp(timestamp /1000)
 ########################################################################
 class Feature(object):
     """ returns a feature  """
@@ -78,7 +86,8 @@ class Feature(object):
         self._wkid = wkid
         if type(json_string) is dict:
             if not wkid is None:
-                json_string['geometry']['spatialReference']  = {"wkid" : wkid}
+                if 'geometry' in json_string and 'spatialReference' in json_string['geometry']:
+                    json_string['geometry']['spatialReference']  = {"wkid" : wkid}
             self._json = json.dumps(json_string,
                                     default=_date_handler)
             self._dict = json_string
@@ -122,15 +131,15 @@ class Feature(object):
                     return False
                 self._json = json.dumps(self._dict, default=_date_handler)
             elif arcpyFound and isinstance(value, arcpy.Geometry):
-                if arcpyFound and isinstance(value, arcpy.PointGeometry):
+                if isinstance(value, arcpy.PointGeometry):
                     self.set_value( field_name, Point(value,value.spatialReference.factoryCode))
-                elif arcpyFound and isinstance(value, arcpy.Multipoint):
+                elif isinstance(value, arcpy.Multipoint):
                     self.set_value( field_name,  MultiPoint(value,value.spatialReference.factoryCode))
 
-                elif arcpyFound and isinstance(value, arcpy.Polyline):
+                elif isinstance(value, arcpy.Polyline):
                     self.set_value( field_name,  Polyline(value,value.spatialReference.factoryCode))
 
-                elif arcpyFound and isinstance(value, arcpy.Polygon):
+                elif isinstance(value, arcpy.Polygon):
                     self.set_value( field_name, Polygon(value,value.spatialReference.factoryCode))
 
         else:
@@ -167,37 +176,32 @@ class Feature(object):
                [row items], [field names]
                returns a list of fields and the row object
         """
-        if arcpyFound:
-            fields = self.fields
-            row = [""] * len(fields)
-            for k,v in self._attributes.iteritems():
-                row[fields.index(k)] = v
-                del v
-                del k
-            if self.geometry is not None:
-                row.append(self.geometry)
-                fields.append("SHAPE@")
-            return row, fields
-        else:
-            raise ImportError("You need arcpy to use asRow")
-        return None
+        fields = self.fields
+        row = [""] * len(fields)
+        for k,v in self._attributes.iteritems():
+            row[fields.index(k)] = v
+            del v
+            del k
+        if self.geometry is not None:
+            row.append(self.geometry)
+            fields.append("SHAPE@")
+        return row, fields
     #----------------------------------------------------------------------
     @property
     def geometry(self):
         """returns the feature geometry"""
-        if arcpyFound:
-            if not self._wkid is None:
-                sr = arcpy.SpatialReference(self._wkid)
-            else:
-                sr = None
-            if self._geom is None:
-                if self._dict.has_key('feature'):
-                    self._geom = arcpy.AsShape(self._dict['feature']['geometry'], esri_json=True)
-                elif self._dict.has_key('geometry'):
-                    self._geom = arcpy.AsShape(self._dict['geometry'], esri_json=True)
-            return self._geom
+        if arcpyFound == False:
+            raise Exception("ArcPy must be installed to use this property")
+        if not self._wkid is None:
+            sr = arcpy.SpatialReference(self._wkid)
         else:
-            raise ImportError("You need arcpy to use geometry")
+            sr = None
+        if self._geom is None:
+            if self._dict.has_key('feature'):
+                self._geom = arcpy.AsShape(self._dict['feature']['geometry'], esri_json=True)
+            elif self._dict.has_key('geometry'):
+                self._geom = arcpy.AsShape(self._dict['geometry'], esri_json=True)
+        return self._geom
     #----------------------------------------------------------------------
     @property
     def fields(self):
@@ -226,36 +230,34 @@ class Feature(object):
            Output:
               list of feature objects
         """
-        if arcpyFound:
-            desc = arcpy.Describe(dataset)
-            fields = [field.name for field in arcpy.ListFields(dataset) if field.type not in ['Geometry']]
-            date_fields = [field.name for field in arcpy.ListFields(dataset) if field.type =='Date']
-            non_geom_fields = copy.deepcopy(fields)
-            features = []
-            if hasattr(desc, "shapeFieldName"):
-                fields.append("SHAPE@JSON")
-            del desc
-            with arcpy.da.SearchCursor(dataset, fields) as rows:
-                for row in rows:
-                    row = list(row)
-                    for df in date_fields:
-                        if row[fields.index(df)] != None:
-                            row[fields.index(df)] = int((_date_handler(row[fields.index(df)])))
-                    template = {
-                        "attributes" : dict(zip(non_geom_fields, row))
-                    }
-                    if "SHAPE@JSON" in fields:
-                        template['geometry'] = \
-                            json.loads(row[fields.index("SHAPE@JSON")])
+        if arcpyFound == False:
+            raise Exception("ArcPy must be installed to run this function.")
+        desc = arcpy.Describe(dataset)
+        fields = [field.name for field in arcpy.ListFields(dataset) if field.type not in ['Geometry']]
+        date_fields = [field.name for field in arcpy.ListFields(dataset) if field.type =='Date']
+        non_geom_fields = copy.deepcopy(fields)
+        features = []
+        if hasattr(desc, "shapeFieldName"):
+            fields.append("SHAPE@JSON")
+        del desc
+        with arcpy.da.SearchCursor(dataset, fields) as rows:
+            for row in rows:
+                row = list(row)
+                for df in date_fields:
+                    if row[fields.index(df)] != None:
+                        row[fields.index(df)] = int((_date_handler(row[fields.index(df)])))
+                template = {
+                    "attributes" : dict(zip(non_geom_fields, row))
+                }
+                if "SHAPE@JSON" in fields:
+                    template['geometry'] = \
+                        json.loads(row[fields.index("SHAPE@JSON")])
 
-                    features.append(
-                        Feature(json_string=_unicode_convert(template))
-                    )
-                    del row
-            return features
-        else:
-            raise ImportError("ArcPy is required for this function.")
-        return None
+                features.append(
+                    Feature(json_string=_unicode_convert(template))
+                )
+                del row
+        return features
     #----------------------------------------------------------------------
     def __str__(self):
         """"""
@@ -592,7 +594,10 @@ class FeatureSet(object):
         else:
             fields = {'fields':[]}
         for feat in jd['features']:
-            features.append(Feature(feat, jd['spatialReference']['latestWkid']))
+            wkid = None
+            if 'spatialReference' in jd and 'latestWkid' in jd['spatialReference']:
+                wkid = jd['spatialReference']['latestWkid']
+            features.append(Feature(json_string=feat, wkid=wkid))
         return FeatureSet(fields,
                           features,
                           hasZ=jd['hasZ'] if 'hasZ' in jd else False,
@@ -701,16 +706,13 @@ class FeatureSet(object):
             writer.flush()
             writer.close()
         del writer
-        if arcpyFound:
-
-            res = json_to_featureclass(json_file=tempFile,
-                                       out_fc=os.path.join(saveLocation, outName))
-            os.remove(tempFile)
-            return res
-        else:
-            return tempfile
+        res = json_to_featureclass(json_file=tempFile,
+                                   out_fc=os.path.join(saveLocation, outName))
+        os.remove(tempFile)
+        return res
     #----------------------------------------------------------------------
     @property
     def features(self):
         """gets the features in the FeatureSet"""
         return self._features
+

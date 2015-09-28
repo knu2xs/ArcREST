@@ -37,9 +37,8 @@ class GeoDataService(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        if self._securityHandler is not None:
-            params['token'] = self._securityHandler.token
         json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json_dict = json_dict
@@ -51,7 +50,7 @@ class GeoDataService(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, v)
             else:
-                print k, " - attribute not implmented for GeoData Service"
+                print k, " - attribute not implemented for GeoData Service"
     #----------------------------------------------------------------------
     def __str__(self):
         """returns object as string"""
@@ -65,7 +64,7 @@ class GeoDataService(BaseAGSServer):
         """
         attributes = json.loads(str(self))
         for att in attributes.keys():
-            yield (att, getattr(self, att))
+            yield [att, getattr(self, att)]
     #----------------------------------------------------------------------
     @property
     def defaultWorkingVersion(self):

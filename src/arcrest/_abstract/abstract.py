@@ -6,6 +6,9 @@ import calendar
 import glob
 import mimetypes
 import os
+class BaseGeoEnrichment(_base.BaseWebOperations):
+    """ base geoenrichment class """
+    pass
 ########################################################################
 class BaseBookmark(object):
     """ base Bookmark class """
@@ -50,6 +53,20 @@ class BaseParameters(object):
 class BaseSecurityHandler(_base.BaseWebOperations):
     """ All Security Objects inherit from this class """
     _token = None
+    _valid = True
+    _message = ""
+    _is_portal = False    
+    #----------------------------------------------------------------------
+    @property
+    def message(self):
+        """ returns any messages """
+        return self._message
+    #----------------------------------------------------------------------
+    @property
+    def valid(self):
+        """ returns boolean wether handler is valid """
+        return self._valid    
+   
 ########################################################################
 class AbstractGeometry(object):
     """ Base Geometry Class """
@@ -144,7 +161,7 @@ class BaseAGOLClass(_base.BaseWebOperations):
     _org_url ="http://www.arcgis.com"
     _url = "http://www.arcgis.com/sharing/rest"
     _surl = "https://www.arcgis.com/sharing/rest"
-    _referer_url = "https://www.arcgis.com"
+    _referer_url = "http://www.arcgis.com"
     _useragent = "ArcREST"
     _token_url = 'https://www.arcgis.com/sharing/rest/generateToken'
     _proxy_url = None
@@ -155,7 +172,7 @@ class BaseAGOLClass(_base.BaseWebOperations):
             if not org_url.startswith('http://') and not org_url.startswith('https://'):
                 org_url = 'http://' + org_url
             self._org_url = org_url
-        
+
         if self._org_url.lower().find('/sharing/rest') > -1:
             self._url = self._org_url
         else:

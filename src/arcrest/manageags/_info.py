@@ -38,10 +38,10 @@ class Info(BaseAGSServer):
     def __init(self):
         """ populates server admin information """
         params = {
-            "f" : "json",
-            "token" : self._securityHandler.token
+            "f" : "json"
         }
         json_dict = self._do_get(url=self._url, param_dict=params,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._json = json.dumps(json_dict)
@@ -52,7 +52,7 @@ class Info(BaseAGSServer):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in Info."
             del k
             del v
     #----------------------------------------------------------------------
@@ -105,6 +105,29 @@ class Info(BaseAGSServer):
             self.__init()
         return self._loggedInUserPrivilege
     #----------------------------------------------------------------------
+    def healthCheck(self):
+        """
+        The health check reports if the ArcGIS Server site is able to
+        receive requests. For example, during site creation, this URL
+        reports the site is unhealthy because it can't take requests at
+        that time. This endpoint is useful if you're setting up a
+        third-party load balancer or other monitoring software that
+        supports a health check function.
+        A healthy (available) site will return an HTTP 200 response code
+        along with a message indicating "success": true (noted below). An
+        unhealthy (unavailable) site will return messaging other than HTTP
+        200.
+        """
+        url = self._url + "/healthCheck"
+        params = {
+            "f" : "json"
+        }
+        return self._do_get(url=url,
+                            param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
     def getAvailableTimeZones(self):
         """
            Returns an enumeration of all the time zones of which the server
@@ -112,9 +135,9 @@ class Info(BaseAGSServer):
         """
         url = self._url + "/getAvailableTimeZones"
         params = {
-            "token" : self._securityHandler.token,
             "f" : "json"
         }
         return self._do_get(url, params,
+                            securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)

@@ -16,7 +16,7 @@ class Services(BaseAGOLClass):
           url - url to service admin site: http://<web server hostname>/arcgis/rest/admin
           securityHandler - AGOL/Portal
     """
-    _token = None
+
     _url = None
     _currentVersion = None
     _resources = None
@@ -25,6 +25,9 @@ class Services(BaseAGOLClass):
     _proxy_url = None
     _securityHandler = None
     _services = None
+    _folders = None
+    _description = None
+    _folderName = None
     #----------------------------------------------------------------------
     def __init__(self,
                  url,
@@ -36,29 +39,34 @@ class Services(BaseAGOLClass):
         self._url = url
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
-        if securityHandler is not None and \
-           isinstance(securityHandler, BaseSecurityHandler):
-            if isinstance(securityHandler, (security.AGOLTokenSecurityHandler,
-                                            security.PortalTokenSecurityHandler)):
-                self._token = securityHandler.token
-                self._securityHandler = securityHandler
-                if not securityHandler is None:
-                    self._referer_url = securityHandler.referer_url
+
+        if isinstance(securityHandler, BaseSecurityHandler):
+            if hasattr(securityHandler, 'is_portal'):
+                if securityHandler.is_portal:
+                    if hasattr(securityHandler, 'portalServerHandler'):
+                        self._securityHandler = securityHandler.portalServerHandler(serverUrl=url)
+                    else:
+                        self._securityHandler = securityHandler
+                else:
+                    self._securityHandler = securityHandler
+
             else:
-                raise AttributeError("Invalid Security Handler, " + \
-                                     "only AGOLTokenSecurityHandler is accepted")
+                self._securityHandler = securityHandler
+
+
+
+        else:
+            raise AttributeError("Admin only supports AGOL, ArcGIS, Portal, NTLM, LDAP, PKI and OAuth security handlers")
+
         if initialize:
             self.__init()
     #----------------------------------------------------------------------
     def __init(self):
         """ initializes the service """
-        params = {
-            "f" : "json",
-        }
-        if self._token is not None:
-            params['token'] = self._token
+        params = {"f" : "json"}
         json_dict = self._do_get(self._url, params,
                                  proxy_port=self._proxy_port,
+                                 securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url)
         attributes = [attr for attr in dir(self)
                       if not attr.startswith('__') and \
@@ -67,8 +75,29 @@ class Services(BaseAGOLClass):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented."
+                print k, " - attribute not implemented in hostedservice.Services."
             del k, v
+    #----------------------------------------------------------------------
+    @property
+    def folders(self):
+        """returns the service folders"""
+        if self._folders is None:
+            self.__init()
+        return self._folders
+    #----------------------------------------------------------------------
+    @property
+    def description(self):
+        """returns the description property"""
+        if self._description is None:
+            self.__init()
+        return self._description
+    #----------------------------------------------------------------------
+    @property
+    def folderName(self):
+        """returns the folder name"""
+        if self._folderName is None:
+            self.__init()
+        return self._folderName
     #----------------------------------------------------------------------
     @property
     def securityHandler(self):
@@ -81,9 +110,9 @@ class Services(BaseAGOLClass):
         if isinstance(value, BaseSecurityHandler):
             if isinstance(value, security.AGOLTokenSecurityHandler):
                 self._securityHandler = value
-                self._token = value.token
+
             elif isinstance(value, security.OAuthSecurityHandler):
-                self._token = value.token
+
                 self._securityHandler = value
             else:
                 pass
@@ -113,34 +142,70 @@ class Services(BaseAGOLClass):
     def services(self):
         """ returns all the service objects in the admin service's page """
         self._services = []
-        params = {
-            "f" : "json",
-            "token" : self._token
-        }
-        uURL = self._url + "/services"
+        params = {"f": "json"}
+        if not self._url.endswith('/services'):
+            uURL = self._url + "/services"
+        else:
+            uURL = self._url
         res = self._do_get(url=uURL, param_dict=params,
+                           securityHandler=self._securityHandler,
                            proxy_port=self._proxy_port,
                            proxy_url=self._proxy_url)
         for k, v in res.iteritems():
-            if k == "services":
+            if k == "foldersDetail":
                 for item in v:
-                    if 'type' in item and item['type'] == 'MapServer':
-                        self._services.append(
-                            AdminMapService(url=uURL + r"/%s/%s" % (item['name'],item['type']),
-                                            securityHandler=self._securityHandler,
-                                           proxy_url=self._proxy_url,
-                                           proxy_port=self._proxy_port)
-                            )
-                    else:
-                        surl = uURL + r"/%s/%s" % (item['adminServiceInfo']['name'],
-                                            item['adminServiceInfo']['type'])
-                        self._services.append(
-                            AdminFeatureService(url=surl,
-                                                securityHandler=self._securityHandler,
-                                                initialize=False,
-                                                proxy_url=self._proxy_url,
-                                                proxy_port=self._proxy_port))
+                    if 'isDefault' in item and item['isDefault'] == False:
+                        fURL = self._url + "/services/" + item['folderName']
+                        resFolder = self._do_get(url=fURL, param_dict=params,
+                                                 securityHandler=self._securityHandler,
+                                                 proxy_port=self._proxy_port,
+                                                 proxy_url=self._proxy_url)
+                        for k1, v1 in resFolder.iteritems():
+                            if k1 == "services":
+                                self._checkservice(k1,v1,fURL)
+            elif k == "services":
+                self._checkservice(k,v,uURL)
         return self._services
+
+    def _checkservice(self,k,v,url):
+        for item in v:
+            if 'adminServiceInfo' in item:
+                item = item['adminServiceInfo']
+            if 'type' in item and item['type'] == 'MapServer':
+                if 'name' in item:
+                    name = item['name']
+                typefs = item['type']
+                if item.has_key('name') == True:
+                    name = item['name']
+                elif item.has_key('serviceName') == True:
+                    name = item['serviceName']
+
+                self._services.append(
+                AdminMapService(url=url + r"/%s.%s" % (name,item['type']),
+                                        securityHandler=self._securityHandler,
+                                       proxy_url=self._proxy_url,
+                                       proxy_port=self._proxy_port,
+                                       initialize=False)
+                        )
+            elif 'type' in item and item['type'] == 'FeatureServer':
+                if 'name' in item:
+                    name = item['name']
+                typefs = item['type']
+                if item.has_key('adminServiceInfo') == True:
+                    name = item['adminServiceInfo']['name']
+                    typefs = item['adminServiceInfo']['type']
+                elif item.has_key('serviceName') == True:
+                    name = item['serviceName']
+                    typefs = item['type']
+
+                surl = url + r"/%s.%s" % (name,
+                                           typefs)
+                self._services.append(
+                    AdminFeatureService(url=surl,
+                                        securityHandler=self._securityHandler,
+                                        initialize=False,
+                                        proxy_url=self._proxy_url,
+                                        proxy_port=self._proxy_port))
 ########################################################################
 class AdminMapService(BaseAGOLClass):
     """
@@ -179,6 +244,10 @@ class AdminMapService(BaseAGOLClass):
     _serverId = None
     _exportTilesAllowed = None
     _urlService = None
+    _readonly = None
+    _resampling = None
+    _json = None
+    _json_dict = None
     #----------------------------------------------------------------------
     def __init__(self, url,
                  securityHandler,
@@ -187,13 +256,24 @@ class AdminMapService(BaseAGOLClass):
                  proxy_port=None):
         """Constructor"""
         self._url = url
-        if isinstance(securityHandler, security.AGOLTokenSecurityHandler):
-            self._token = securityHandler.token
-            self._securityHandler = securityHandler
-            if not securityHandler is None:
-                self._referer_url = securityHandler.referer_url
+
+
+        if isinstance(securityHandler, BaseSecurityHandler):
+            if hasattr(securityHandler, 'is_portal'):
+                if securityHandler.is_portal:
+                    if hasattr(securityHandler, 'portalServerHandler'):
+                        self._securityHandler = securityHandler.portalServerHandler(serverUrl=url)
+                    else:
+                        self._securityHandler = securityHandler
+                else:
+                    self._securityHandler = securityHandler
+
+            else:
+                self._securityHandler = securityHandler
+
         else:
-            raise AttributeError("Security Handler must be security.AGOLTokenSecurityHandler")
+            raise AttributeError("Admin only supports AGOL, ArcGIS, Portal, NTLM, LDAP, PKI and OAuth security handlers")
+
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
         if initialize:
@@ -204,10 +284,12 @@ class AdminMapService(BaseAGOLClass):
         params = {
             "f" : "json",
         }
-        if self._token is not None:
-            params['token'] = self._token
-        json_dict = self._do_get(self._url, params, proxy_port=self._proxy_port,
+        json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
+                                 proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
+        self._json_dict = json_dict
+        self._json = json.dumps(self._json_dict)
         attributes = [attr for attr in dir(self)
                       if not attr.startswith('__') and \
                       not attr.startswith('_')]
@@ -218,9 +300,36 @@ class AdminMapService(BaseAGOLClass):
             elif k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print "_%s = None" % k
-                #print k,  " - attribute not implmented. Please log an support request."
+                print k,  " - attribute not implemented. Please log an support request."
             del k, v
+    #----------------------------------------------------------------------
+    def __iter__(self):
+        """returns the key/value pair of the raw JSON"""
+        if self._json_dict is None:
+            self.__init()
+        for k,v in self._json_dict.iteritems():
+            yield [k,v]
+    #----------------------------------------------------------------------
+    def __str__(self):
+        """returns raw json from url query"""
+        if self._json is None:
+            self.__init()
+        return self._json
+    #----------------------------------------------------------------------
+    @property
+    def readonly(self):
+        """returns the readonly property"""
+        if self._readonly is None:
+            self.__init()
+        return self._readonly
+    #----------------------------------------------------------------------
+    @property
+    def resampling(self):
+        """returns the resampling property"""
+        if self._resampling is None:
+            self.__init()
+        return self._resampling
+
     #----------------------------------------------------------------------
     @property
     def currentJob(self):
@@ -236,7 +345,6 @@ class AdminMapService(BaseAGOLClass):
         if self._lodInfos is None:
             self.__init()
         return self._lodInfos
-
     #----------------------------------------------------------------------
     @property
     def id(self):
@@ -244,7 +352,6 @@ class AdminMapService(BaseAGOLClass):
         if self._id is None:
             self.__init()
         return self._id
-
     #----------------------------------------------------------------------
     @property
     def size(self):
@@ -252,7 +359,6 @@ class AdminMapService(BaseAGOLClass):
         if self._size is None:
             self.__init()
         return self._size
-
     #----------------------------------------------------------------------
     @property
     def tileInfo(self):
@@ -260,7 +366,6 @@ class AdminMapService(BaseAGOLClass):
         if self._tileInfo is None:
             self.__init()
         return self._tileInfo
-
     #----------------------------------------------------------------------
     @property
     def jobStatus(self):
@@ -268,7 +373,6 @@ class AdminMapService(BaseAGOLClass):
         if self._jobStatus is None:
             self.__init()
         return self._jobStatus
-
     #----------------------------------------------------------------------
     @property
     def access(self):
@@ -276,7 +380,6 @@ class AdminMapService(BaseAGOLClass):
         if self._access is None:
             self.__init()
         return self._access
-
     #----------------------------------------------------------------------
     @property
     def cacheExecutionStatus(self):
@@ -284,7 +387,6 @@ class AdminMapService(BaseAGOLClass):
         if self._cacheExecutionStatus is None:
             self.__init()
         return self._cacheExecutionStatus
-
     #----------------------------------------------------------------------
     @property
     def type(self):
@@ -412,17 +514,7 @@ class AdminMapService(BaseAGOLClass):
         if self._status is None:
             self.__init()
         return self._status
-    #----------------------------------------------------------------------
-    def refresh(self):
-        """ refreshes a service """
-        params = {
-            "f" : "json",
-            "token" : self._token
-        }
-        uURL = self._url + "/refresh"
-        return self._do_get(url=uURL, param_dict=params,
-                            proxy_port=self._proxy_port,
-                            proxy_url=self._proxy_url)
+
     #----------------------------------------------------------------------
     @property
     def securityHandler(self):
@@ -434,10 +526,106 @@ class AdminMapService(BaseAGOLClass):
         """ sets the security handler """
         if isinstance(value, security.AGOLTokenSecurityHandler):
             self._securityHandler = value
-            self._token = value.token
 
         else:
             raise AttributeError("This object only accepts security.AGOLTokenSecurityHandler")
+    #----------------------------------------------------------------------
+    def refresh(self, serviceDefinition=True):
+        """
+        The refresh operation refreshes a service, which clears the web
+        server cache for the service.
+        """
+        url = self._url + "/MapServer/refresh"
+        params = {
+            "f" : "json",
+            "serviceDefinition" : serviceDefinition
+        }
+
+        res =  self._do_post(url=self._url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+        self.__init()
+        return res
+    #----------------------------------------------------------------------
+    def cancelJob(self, jobId):
+        """
+        The cancel job operation supports cancelling a job while update
+        tiles is running from a hosted feature service. The result of this
+        operation is a response indicating success or failure with error
+        code and description.
+
+        Inputs:
+           jobId - jobId to cancel
+        """
+        url = self._url + "/jobs/%s/cancel" % jobId
+        params = {
+            "f" : "json"
+        }
+        return self._do_post(url=url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def jobStatistics(self, jobId):
+        """
+        The delete job operation supports deleting a job from a hosted map
+        service. The result of this operation is a response indicating
+        success or failure with error code and description.
+
+        """
+        url = self._url + "/jobs/%s" % jobId
+        params = {
+            "f" : "json"
+        }
+        return self._do_post(url=url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def editTileService(self,
+                        serviceDefinition=None,
+                        minScale=None,
+                        maxScale=None,
+                        sourceItemId=None,
+                        exportTilesAllowed=False,
+                        maxExportTileCount=100000):
+        """
+        This post operation updates a Tile Service's properties
+
+        Inputs:
+           serviceDefinition - updates a service definition
+           minScale - sets the services minimum scale for caching
+           maxScale - sets the service's maximum scale for caching
+           sourceItemId - The Source Item ID is the GeoWarehouse Item ID of the map service
+           exportTilesAllowed - sets the value to let users export tiles
+           maxExportTileCount - sets the maximum amount of tiles to be exported
+             from a single call.
+        """
+        params = {
+            "f" : "json",
+        }
+        if not serviceDefinition is None:
+            params["serviceDefinition"] = serviceDefinition
+        if not minScale is None:
+            params['minScale'] = float(minScale)
+        if not maxScale is None:
+            params['maxScale'] = float(maxScale)
+        if not sourceItemId is None:
+            params["sourceItemId"] = sourceItemId
+        if not exportTilesAllowed is None:
+            params["exportTilesAllowed"] = exportTilesAllowed
+        if not maxExportTileCount is None:
+            params["maxExportTileCount"] = int(maxExportTileCount)
+        url = self._url + "/edit"
+        return self._do_post(url=url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._securityHandler.proxy_url,
+                             proxy_port=self._securityHandler.proxy_port)
 
 ########################################################################
 class AdminFeatureService(BaseAGOLClass):
@@ -455,7 +643,7 @@ class AdminFeatureService(BaseAGOLClass):
        contents of the service.  Note, query and edit operations are not
        available via the adminstrative resource.
     """
-    _token = None
+
     _url = None
     _xssPreventionInfo = None
     _size = None
@@ -463,6 +651,8 @@ class AdminFeatureService(BaseAGOLClass):
     _initialExtent = None
     _copyrightText = None
     _layers = None
+    _tables = None
+    _enableZDefaults = None
     _syncCapabilities = None
     _capabilities = None
     _currentVersion = None
@@ -481,6 +671,7 @@ class AdminFeatureService(BaseAGOLClass):
     _syncEnabled = None
     _dict = None
     _json = None
+    _json_dict = None
     _error = None
     #----------------------------------------------------------------------
     def __init__(self, url,
@@ -489,18 +680,29 @@ class AdminFeatureService(BaseAGOLClass):
                  proxy_url=None,
                  proxy_port=None):
         """Constructor"""
+        if url is None:
+            return
         if 'rest/services' in url:
             url = url.replace('rest/services', 'rest/admin/services')
         self._url = url
 
-        if isinstance(securityHandler, security.AGOLTokenSecurityHandler) or \
-           isinstance(securityHandler, security.PortalTokenSecurityHandler):
-            self._securityHandler = securityHandler
-            if not securityHandler is None:
-                self._referer_url = securityHandler.referer_url
-            self._token = securityHandler.token
+
+        if isinstance(securityHandler, BaseSecurityHandler):
+            if hasattr(securityHandler, 'is_portal'):
+                if securityHandler.is_portal:
+                    if hasattr(securityHandler, 'portalServerHandler'):
+                        self._securityHandler = securityHandler.portalServerHandler(serverUrl=url)
+                    else:
+                        self._securityHandler = securityHandler
+                else:
+                    self._securityHandler = securityHandler
+
+            else:
+                self._securityHandler = securityHandler
+
+
         else:
-            raise AttributeError("Admin only supports security.AGOLTokenSecurityHandler or security.PortalTokenSecurityHandler")
+            raise AttributeError("Admin only supports AGOL, ArcGIS, Portal, NTLM, LDAP, PKI and OAuth security handlers")
 
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
@@ -512,11 +714,12 @@ class AdminFeatureService(BaseAGOLClass):
         params = {
             "f" : "json",
         }
-        if self._token is not None:
-            params['token'] = self._token
+
         json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
+        self._json_dict = json_dict
         self._dict = json_dict
         self._json = json.dumps(self._dict)
         attributes = [attr for attr in dir(self)
@@ -530,13 +733,33 @@ class AdminFeatureService(BaseAGOLClass):
                                                   securityHandler=self._securityHandler,
                                                   proxy_port=self._proxy_port,
                                                   proxy_url=self._proxy_url)
+                    fl.loadAttributes(json_dict = lyr)
                     self._layers.append(fl)
+                    del fl
+                    del lyr
+            elif k == "tables":
+                self._tables = []
+                for lyr in v:
+                    fl = AdminFeatureServiceLayer(url=self._url + "/%s" % lyr['id'],
+                                                  securityHandler=self._securityHandler,
+                                                  proxy_port=self._proxy_port,
+                                                  proxy_url=self._proxy_url)
+                    fl.loadAttributes(json_dict = lyr)
+                    self._tables.append(fl)
                     del fl
                     del lyr
             elif k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented in AdminFeatureService."
+                #print k, " - attribute not implemented in AdminFeatureService."
+                print """#------attribute not implemented in AdminFeatureService class--------------------------
+                        @property
+                        def %s(self):
+                            '''gets the property value for %s'''
+                            if self._%s is None:
+                                self.__init()
+                            return self._%s
+                        """ % (k,k,k, k)                                
     #----------------------------------------------------------------------
     @property
     def error(self):
@@ -554,9 +777,9 @@ class AdminFeatureService(BaseAGOLClass):
     def securityHandler(self, value):
         """ sets the security handler """
         if isinstance(value, BaseSecurityHandler):
-            if isinstance(value, security.AGOLTokenSecurityHandler):
+            if isinstance(value, (security.AGOLTokenSecurityHandler,security.PortalTokenSecurityHandler,security.ArcGISTokenSecurityHandler)):
                 self._securityHandler = value
-                self._token = value.token
+
             else:
                 raise AttributeError("Admin only supports security.AGOLTokenSecurityHandler")
     #----------------------------------------------------------------------
@@ -566,27 +789,36 @@ class AdminFeatureService(BaseAGOLClass):
             self.__init()
         return self._json
     #----------------------------------------------------------------------
+    def __iter__(self):
+        """returns the key/value pair of the raw JSON"""
+        if self._json_dict is None:
+            self.__init()
+        for k,v in self._json_dict.iteritems():
+            yield [k,v]
+
+    #----------------------------------------------------------------------
     @property
     def status(self):
         """ returns the service status """
         uURL = self._url + "/status"
         params = {
-            "token" : self._token,
             "f" : "json"
         }
         return self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
     #----------------------------------------------------------------------
     def refresh(self):
         """ refreshes a service """
-        params = {
-            "f" : "json",
-            "token" : self._token
-        }
+        params = {"f": "json"}
         uURL = self._url + "/refresh"
-        return self._do_get(url=uURL, param_dict=params, proxy_port=self._proxy_port,
-                            proxy_url=self._proxy_url)
+        res = self._do_get(url=uURL, param_dict=params,
+                           securityHandler=self._securityHandler,
+                           proxy_port=self._proxy_port,
+                           proxy_url=self._proxy_url)
+        self.__init()
+        return res
     #----------------------------------------------------------------------
     @property
     def xssPreventionInfo(self):
@@ -744,8 +976,37 @@ class AdminFeatureService(BaseAGOLClass):
         return self._layers
     #----------------------------------------------------------------------
     @property
+    def tables(self):
+        """ returns the layers for a service """
+        if self._tables is None:
+            self.__init()
+        return self._tables
+    #----------------------------------------------------------------------
+    @property
+    def enableZDefaults(self):
+        """ returns the layers for a service """
+        if self._enableZDefaults is None:
+            self.__init()
+        return self._enableZDefaults
+
+    #----------------------------------------------------------------------
+    @property
     def asDictionary(self):
         """ returns the feature service as a dictionary object """
+        if self._dict is None:
+            self.__init()
+        return self._dict
+    #----------------------------------------------------------------------
+    @property
+    def url(self):
+        """ returns boolean is disconnecting editted supported """
+        if self._url is None:
+            return None
+        return self._url
+    #----------------------------------------------------------------------
+    @property
+    def json(self):
+        """ returns boolean is disconnecting editted supported """
         if self._dict is None:
             self.__init()
         return self._dict
@@ -770,13 +1031,16 @@ class AdminFeatureService(BaseAGOLClass):
         """
         params = {
             "f" : "json",
-            "token" : self._token,
             "addToDefinition" : json.dumps(json_dict),
             "async" : False
         }
         uURL = self._url + "/addToDefinition"
-        return self._do_post(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+        self.refresh()
+        return res
     #----------------------------------------------------------------------
     def updateDefinition(self, json_dict):
         """
@@ -793,15 +1057,19 @@ class AdminFeatureService(BaseAGOLClass):
            Output:
               JSON Message as dictionary
         """
+
         params = {
             "f" : "json",
-            "token" : self._token,
             "updateDefinition" : json.dumps(json_dict),
             "async" : False
         }
         uURL = self._url + "/updateDefinition"
-        return self._do_post(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_post(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+        self.refresh()
+        return res
     #----------------------------------------------------------------------
     def deleteFromDefinition(self, json_dict):
         """
@@ -825,13 +1093,16 @@ class AdminFeatureService(BaseAGOLClass):
         """
         params = {
             "f" : "json",
-            "token" : self._token,
             "deleteFromDefinition" : json.dumps(json_dict),
             "async" : False
         }
         uURL = self._url + "/deleteFromDefinition"
-        return self._do_post(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_post(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+        self.refresh()
+        return res
 ########################################################################
 class AdminFeatureServiceLayer(BaseAGOLClass):
     """
@@ -939,7 +1210,7 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
     _hasLabels = None
     _canScaleSymbols = None
     _ownershipBasedAccessControlForFeatures = None
-    _useStandardizedQueries = None
+    _adminLayerInfo = None
     _supportsAttachmentsByUploadId = None
     _editingInfo = None
     _supportsCalculate = None
@@ -948,6 +1219,15 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
     _json = None
     _json_dict = None
     _error = None
+    _adminLayerInfo = None
+    _syncCanReturnChanges = None
+    _dateFieldsTimeReference = None
+    _enableZDefaults = None
+    _ogcGeometryType = None
+    _exceedsLimitFactor = None
+    _useStandardizedQueries = None
+    _definitionQuery = None
+    _zDefault = None
     #----------------------------------------------------------------------
     def __init__(self, url,
                  securityHandler,
@@ -958,14 +1238,23 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         self._url = url
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
-        if isinstance(securityHandler, security.AGOLTokenSecurityHandler) or \
-           isinstance(securityHandler, security.PortalTokenSecurityHandler):
-            self._securityHandler = securityHandler
-            if not securityHandler is None:
-                self._referer_url = securityHandler.referer_url
-                self._token = securityHandler.token
+
+        if isinstance(securityHandler, BaseSecurityHandler):
+            if hasattr(securityHandler, 'is_portal'):
+                if securityHandler.is_portal:
+                    if hasattr(securityHandler, 'portalServerHandler'):
+                        self._securityHandler = securityHandler.portalServerHandler(serverUrl=url)
+                    else:
+                        self._securityHandler = securityHandler
+                else:
+                    self._securityHandler = securityHandler
+
+            else:
+                self._securityHandler = securityHandler
+
         else:
-            raise AttributeError("This object only accepts security.AGOLTokenSecurityHandler as a security option")
+            raise AttributeError("Admin only supports AGOL, ArcGIS, Portal, NTLM, LDAP, PKI and OAuth security handlers")
+
         if initialize:
             self.__init()
     #----------------------------------------------------------------------
@@ -975,6 +1264,13 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
             self.__init()
         return self._json
     #----------------------------------------------------------------------
+    def __iter__(self):
+        """returns the key/value pair of the raw JSON"""
+        if self._json_dict is None:
+            self.__init()
+        for k,v in self._json_dict.iteritems():
+            yield [k,v]
+    #----------------------------------------------------------------------
     @property
     def securityHandler(self):
         """ returns the current security handler """
@@ -983,9 +1279,8 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
     @securityHandler.setter
     def securityHandler(self, value):
         """ sets the security handler """
-        if isinstance(value, security.AGOLTokenSecurityHandler):
+        if isinstance(value,( security.AGOLTokenSecurityHandler,security.PortalTokenSecurityHandler,security.ArcGISTokenSecurityHandler)):
             self._securityHandler = value
-            self._token = value.token
 
         else:
             raise AttributeError("This object only accepts security.AGOLTokenSecurityHandler")
@@ -995,32 +1290,43 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         params = {
             "f" : "json",
         }
-        if self._token is not None:
-            params['token'] = self._token
-
-        json_dict = self._do_get(self._url, params, proxy_port=self._proxy_port,
+        json_dict = self._do_get(self._url, params,
+                                 securityHandler=self._securityHandler,
+                                 proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
         self._json = json.dumps(json_dict)
         self._json_dict = json_dict
+        self.loadAttributes(json_dict=json_dict)
+    #----------------------------------------------------------------------
+    def loadAttributes(self,json_dict):
         attributes = [attr for attr in dir(self)
-                      if not attr.startswith('__') and \
-                      not attr.startswith('_')]
+                     if not attr.startswith('__') and \
+                     not attr.startswith('_')]
         for k,v in json_dict.iteritems():
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print k, " - attribute not implmented AdminFeatureServiceLayer."
+                #print k, " - attribute not implemented AdminFeatureServiceLayer."
+                print """#------attribute not implemented in AdminFeatureServiceLayer class--------------------------
+            @property
+            def %s(self):
+                '''gets the property value for %s'''
+                if self._%s is None:
+                    self.__init()
+                return self._%s
+            """ % (k,k,k, k)                
             del k, v
     #----------------------------------------------------------------------
     def refresh(self):
         """ refreshes a service """
-        params = {
-            "f" : "json",
-            "token" : self._token
-        }
+        params = {"f": "json"}
         uURL = self._url + "/refresh"
-        return self._do_get(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_get(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
+        self.__init()
+        return res
     #----------------------------------------------------------------------
     @property
     def supportsValidateSql(self):
@@ -1371,6 +1677,55 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
             self.__init()
         return self._useStandardizedQueries
     #----------------------------------------------------------------------
+    @property
+    def adminLayerInfo(self):
+        if self._adminLayerInfo is None:
+            self.__init()
+        return self._adminLayerInfo
+    #----------------------------------------------------------------------
+    @property
+    def syncCanReturnChanges(self):
+        if self._syncCanReturnChanges is None:
+            self.__init()
+        return self._syncCanReturnChanges
+    #----------------------------------------------------------------------
+    @property
+    def dateFieldsTimeReference(self):
+        if self._dateFieldsTimeReference is None:
+            self.__init()
+        return self._dateFieldsTimeReference
+    #----------------------------------------------------------------------
+    @property
+    def enableZDefaults(self):
+        if self._enableZDefaults is None:
+            self.__init()
+        return self._enableZDefaults
+    #----------------------------------------------------------------------
+    @property
+    def ogcGeometryType(self):
+        if self._ogcGeometryType is None:
+            self.__init()
+        return self._ogcGeometryType
+    #----------------------------------------------------------------------
+    @property
+    def exceedsLimitFactor(self):
+        if self._exceedsLimitFactor is None:
+            self.__init()
+        return self._exceedsLimitFactor
+    #----------------------------------------------------------------------
+    @property
+    def definitionQuery(self):
+        if self._definitionQuery is None:
+            self.__init()
+        return self._definitionQuery
+    #----------------------------------------------------------------------
+    @property
+    def zDefault(self):
+        if self.zDefault is None:
+            self.__init()
+        return self.zDefault
+
+    #----------------------------------------------------------------------
     def addToDefinition(self, json_dict):
         """
            The addToDefinition operation supports adding a definition
@@ -1391,13 +1746,16 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         """
         params = {
             "f" : "json",
-            "token" : self._token,
             "addToDefinition" : json.dumps(json_dict),
             #"async" : False
         }
         uURL = self._url + "/addToDefinition"
-        return self._do_post(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_post(url=uURL, param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+        self.refresh()
+        return res
     #----------------------------------------------------------------------
     def updateDefinition(self, json_dict):
         """
@@ -1416,13 +1774,17 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         """
         params = {
             "f" : "json",
-            "token" : self._token,
             "updateDefinition" : json.dumps(json_dict),
             "async" : False
         }
+
         uURL = self._url + "/updateDefinition"
-        return self._do_post(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+        self.refresh()
+        return res
     #----------------------------------------------------------------------
     def deleteFromDefinition(self, json_dict):
         """
@@ -1446,10 +1808,12 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         """
         params = {
             "f" : "json",
-            "token" : self._token,
-            "deleteFromDefinition" : json.dumps(json_dict),
-            #"async" : False
+            "deleteFromDefinition" : json.dumps(json_dict)
         }
         uURL = self._url + "/deleteFromDefinition"
-        return self._do_post(url=uURL, param_dict=params, proxy_port=self._proxy_port,
+        res = self._do_post(url=uURL, param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+        self.refresh()
+        return res
