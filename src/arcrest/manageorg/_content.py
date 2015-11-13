@@ -1,9 +1,13 @@
+import six
+if six.PY2:
+    from urlparse import urlparse
+elif six.PY3:
+    from urllib.parse import urlparse
 from ..security.security import OAuthSecurityHandler, AGOLTokenSecurityHandler, PortalTokenSecurityHandler
 from .._abstract.abstract import BaseAGOLClass
 from _parameters import ItemParameter, BaseParameters, AnalyzeParameters, PublishCSVParameters
 from _community import Group as CommunityGroup
-import urllib
-import urlparse
+
 import json
 import os
 import mmap
@@ -1578,7 +1582,7 @@ class UserItem(BaseAGOLClass):
             files.append(('file', data, os.path.basename(data)))
 
         url = "%s/update" % self.root
-        parsed = urlparse.urlparse(url)
+        parsed = urlparse(url)
 
         res = self._post_multipart(host=parsed.hostname,
                                    port=parsed.port,
@@ -1736,7 +1740,7 @@ class UserItem(BaseAGOLClass):
         'itemType' : 'file'
         }
         url = '%s/addPart' % self.root
-        parsed = urlparse.urlparse(url)
+        parsed = urlparse(url)
         with open(filePath, 'rb') as f:
             mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
             size = 50000000
@@ -2152,7 +2156,7 @@ class User(BaseAGOLClass):
         if overwrite != False:
             params['overwrite'] = overwrite
         if filePath is not None:
-            parsed = urlparse.urlparse(url)
+            parsed = urlparse(url)
             files = []
             files.append(('file', filePath, os.path.basename(filePath)))
             res = self._post_multipart(host=parsed.hostname,
@@ -2517,7 +2521,7 @@ class User(BaseAGOLClass):
         if serviceProxyParams is not None:
             params['serviceProxyParams'] = serviceProxyParams
         url = "%s/addItem" % self.location
-        parsed = urlparse.urlparse(url)
+        parsed = urlparse(url)
         files = []
         if multipart:
             params['multipart'] = multipart
@@ -2719,7 +2723,7 @@ class FeatureContent(BaseAGOLClass):
         params['publishParameters'] = publishParameters
         params['option'] = option
 
-        parsed = urlparse.urlparse(url)
+        parsed = urlparse(url)
         if fileType.lower() not in allowedFileTypes and \
            filePath is not None:
             raise AttributeError("fileType must be either shapefile or csv when specifying a file")

@@ -1,11 +1,13 @@
-from ..web import _base
-import httplib
-import zipfile
-import datetime
-import calendar
-import glob
-import mimetypes
-import os
+import six
+if six.PY2:
+    from ..web import _base
+    import httplib
+    import zipfile
+    import datetime
+    import calendar
+    import glob
+    import mimetypes
+    import os
 class BaseGeoEnrichment(_base.BaseWebOperations):
     """ base geoenrichment class """
     pass
@@ -142,20 +144,21 @@ class BaseAGSServer(_base.BaseWebOperations):
             return obj.encode('utf-8')
         else:
             return obj
-# This function is a workaround to deal with what's typically described as a
-# problem with the web server closing a connection. This is problem
-# experienced with www.arcgis.com (first encountered 12/13/2012). The problem
-# and workaround is described here:
-# http://bobrochel.blogspot.com/2010/11/bad-servers-chunked-encoding-and.html
-def patch_http_response_read(func):
-    def inner(*args):
-        try:
-            return func(*args)
-        except httplib.IncompleteRead, e:
-            return e.partial
+if six.PY2:
+    # This function is a workaround to deal with what's typically described as a
+    # problem with the web server closing a connection. This is problem
+    # experienced with www.arcgis.com (first encountered 12/13/2012). The problem
+    # and workaround is described here:
+    # http://bobrochel.blogspot.com/2010/11/bad-servers-chunked-encoding-and.html
+    def patch_http_response_read(func):
+        def inner(*args):
+            try:
+                return func(*args)
+            except httplib.IncompleteRead, e:
+                return e.partial
 
-    return inner
-httplib.HTTPResponse.read = patch_http_response_read(httplib.HTTPResponse.read)
+        return inner
+    httplib.HTTPResponse.read = patch_http_response_read(httplib.HTTPResponse.read)
 ########################################################################
 class BaseAGOLClass(_base.BaseWebOperations):
 
